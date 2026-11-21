@@ -37,7 +37,7 @@ class DevGpio:
 
 class Actuator:
     def __init__(self, gpio=None, sleep=time.sleep, threaded=True):
-self._gpio = gpio if gpio is not None else DevGpio()
+        self._gpio = gpio if gpio is not None else DevGpio()
         self._sleep = sleep
         for pin in (LED_BLUE_1, LED_BLUE_2, LED_RED, LED_GREEN, SERVO):
             self._gpio.set_out(pin)
