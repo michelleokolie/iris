@@ -2,6 +2,7 @@
 // Usage: ./vision model.onnx [socket_path]
 // Without socket_path it only prints (for testing without io running).
 // VISION_DEBUG=1 also prints every box and writes /tmp/vision.ppm with boxes drawn.
+// VISION_DEBOUNCE=up,down,turn overrides the debounce frame counts (default 1,3,2) for tuning.
 
 #include "capture.h"
 #include "debounce.h"
@@ -63,7 +64,10 @@ int main(int argc, char** argv) {
 
     Detector detector(argv[1], THREADS);
     Capture capture(UNIT);
-    Debounce debounce;
+    int up = 1, down = 3, turn = 2;
+    if (const char* d = std::getenv("VISION_DEBOUNCE")) std::sscanf(d, "%d,%d,%d", &up, &down, &turn);
+    std::printf("debounce frames: up %d, down %d, turn %d\n", up, down, turn);
+    Debounce debounce(up, down, turn);
 
     for (;;) {
         Frame frame = capture.next();

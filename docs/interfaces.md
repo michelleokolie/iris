@@ -36,7 +36,7 @@ Rules for `decide`:
 - One ASCII line per message, `\n`-terminated, single spaces, nothing else:
   - Alert: `<level> <direction>\n`, level `0`-`3`, direction `left|right|ahead|clear`. Example: `2 left\n`.
   - Fall (later): `fall\n`.
-- `vision` sends an Alert only when the debounced Alert changes: level up after 2 frames in a row (~0.25 s), level down or back to clear after 5 (~0.6 s), same level with a new direction after 3 (~0.4 s). Single-frame blips are never sent.
+- `vision` sends an Alert only when the debounced Alert changes: level up immediately, level down or back to clear after 3 frames in a row (~0.4 s), same level with a new direction after 2 (~0.25 s). Tunable with VISION_DEBOUNCE=up,down,turn.
 - `0 clear\n` is the only valid level-0 message; `clear` never goes with level > 0.
 
 ## io (Python)
