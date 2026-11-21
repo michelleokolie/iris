@@ -56,7 +56,8 @@ static void send_line(int fd, const std::string& line) {
 static std::string box_line(const std::optional<Box>& b) {
     if (!b) return "box none\n";
     char buf[96];
-    std::snprintf(buf, sizeof(buf), "box %s %.3f %.3f %.3f %.3f\n", b->label.c_str(), b->x1, b->y1, b->x2, b->y2);
+    // Six decimals: with three, a thin box (x1 = 0.9996, x2 = 0.9998) rounds to zero width and io rejects it.
+    std::snprintf(buf, sizeof(buf), "box %s %.6f %.6f %.6f %.6f\n", b->label.c_str(), b->x1, b->y1, b->x2, b->y2);
     return buf;
 }
 

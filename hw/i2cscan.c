@@ -6,6 +6,7 @@
 #include <hw/i2c.h>
 
 int main(int argc, char **argv)
+{
     if (argc != 2) {
         fprintf(stderr, "usage: i2cscan /dev/i2c1\n");
         return 2;
