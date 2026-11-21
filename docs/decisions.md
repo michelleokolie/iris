@@ -9,3 +9,5 @@
 - 2026-11-21: Our Grove modules need a Grove-to-Dupont cable to reach the header; accelerometer not yet seen on /dev/i2c1 (suspect wiring).
 - 2026-11-21: hw/actuate.py takes `Actuator(gpio=...)` (object with set_out(pin), write(pin, on)); default DevGpio writes /dev/gpio/N, hw/fake_gpio.py records writes for tests/demo (`python hw/demo_alerts.py --fake`).
 - 2026-11-21: hw/ir_trigger.py (HandWave: rising edge + cooldown) and hw/fall.py (FallDetector: freefall <0.4g then impact >1.3g (MMA7660FC at 0x4C, +-1.5g) within 1s) take injected readers/samples; real GPIO27 read and I2C accelerometer read are not written yet (chip and QNX read path unverified).
+- 2026-11-21: Whole pipeline stays Python on the Pi (no C++ vision process, no /tmp/iris.sock split); `vision` and `actuate`/`speak` run in one Python process. Supersedes the closed PR #2 proposal.
+- 2026-11-21: On the board (QNX 8.0, Python 3.14): `import cv2` works (4.12.0, numpy 2.4.1). `cv2.VideoCapture` on the webcam is not yet verified. Python `onnxruntime` is installed, but `import onnxruntime` fails: missing `onnxruntime.capi.onnxruntime_pybind11_state` (native module not installed).
