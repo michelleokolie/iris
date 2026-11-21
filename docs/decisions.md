@@ -23,3 +23,4 @@
 - 2026-11-21: DEIMv2 orig_target_sizes must be [width, height] (boxes are scaled by w,h,w,h). PR #3 detect.py passes [h, w], which shrinks x by 0.75 and stretches y by 1.33 (made nearly everything "close").
 - 2026-11-21: Score threshold stays 0.4 (VISION_SCORE env overrides). At 0.2 Femto only adds duplicate/junk boxes; it misses large close objects cut off by the frame at any threshold. Plan: ultrasonic sensor (read by io) for "something close ahead"; interfaces change TBD.
 - 2026-11-21: decide() "ahead" = left/right occupancy within 0.05 of each other (team decision; exact-tie rule from PR #3 practically never fired).
+- 2026-11-21: Ultrasonic = HC-SR04 (5 V). VCC to 5 V, shared GND, TRIG straight to a GPIO, ECHO through a 1k/2k divider (5 V -> 3.3 V) to a GPIO; never wire ECHO directly. Read by io (Python GPIO).
