@@ -1,9 +1,11 @@
-// vision: capture -> detect -> decide, sends Alert lines to io over a UNIX socket.
+// vision: capture -> detect -> decide -> debounce, sends Alert lines to io over a UNIX socket.
 // Usage: ./vision model.onnx [socket_path]
 // Without socket_path it only prints (for testing without io running).
 // VISION_DEBUG=1 also prints every box and writes /tmp/vision.ppm with boxes drawn.
+// VISION_DEBOUNCE=up,down,turn overrides the debounce frame counts (default 1,3,2) for tuning.
 
 #include "capture.h"
+#include "debounce.h"
 #include "decide.h"
 #include "detect.h"
 
@@ -16,6 +18,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <optional>
 #include <string>
 
 static constexpr camera_unit_t UNIT = CAMERA_UNIT_5;  // C920, see docs/decisions.md
@@ -61,7 +64,10 @@ int main(int argc, char** argv) {
 
     Detector detector(argv[1], THREADS);
     Capture capture(UNIT);
-    Alert last{-1, ""};
+    int up = 1, down = 3, turn = 2;
+    if (const char* d = std::getenv("VISION_DEBOUNCE")) std::sscanf(d, "%d,%d,%d", &up, &down, &turn);
+    std::printf("debounce frames: up %d, down %d, turn %d\n", up, down, turn);
+    Debounce debounce(up, down, turn);
 
     for (;;) {
         Frame frame = capture.next();
@@ -77,10 +83,11 @@ int main(int argc, char** argv) {
             write_debug_ppm(frame, boxes);
         }
 
-        if (alert == last) continue;
-        last = alert;
+        std::optional<Alert> stable = debounce.update(alert);
+        if (!stable) continue;
+        std::printf("  -> send %d %s\n", stable->level, stable->direction.c_str());
         if (fd < 0) continue;
-        std::string line = std::to_string(alert.level) + " " + alert.direction + "\n";
+        std::string line = std::to_string(stable->level) + " " + stable->direction + "\n";
         if (write(fd, line.data(), line.size()) != static_cast<ssize_t>(line.size())) {
             std::perror("write to io");
             return 1;
