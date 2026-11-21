@@ -19,7 +19,8 @@ decide(boxes: list[Box]) -> Alert
 # direction = side with more free space; "clear" when level 0
 
 # actuate: Alert -> servo tap rate + LEDs (green clear, red level>=2; blue while describing)
-# speak:   Alert | FallEvent -> short phrase string -> audio route
+# speak:   Alert | FallEvent -> short phrase string -> sink(text)   (src/speak.py)
+#          phrase(event) -> str;  Speaker(sink).speak(event) skips repeats;  udp_sink(host, port) = phone route
 FallEvent = str                        # "fall"
 ```
 
