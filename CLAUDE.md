@@ -12,7 +12,7 @@ Prize targets: QNX embedded AI (must run on QNX, use an open-source QNX AI modul
 - Claude may run read-only and bench-test commands on the board over SSH (key auth) once the human has wired a part. Powering down and wiring stay with the human; ask for exact error output when something fails.
 
 ## Pipeline
-capture -> detect (onnxruntime) -> decide -> actuate (servo, LEDs) + speak (audio)
+vision (C++): capture -> detect (onnxruntime) -> decide --Alert over /tmp/iris.sock--> io (Python): actuate (servo, LEDs) + speak (audio)
 
 ## Hardware
 Pi 5 + QNX, 1 USB webcam (MVP; 2nd camera is stretch), servo (tap arm), 4 LEDs (2 blue, 1 red, 1 green), 3-axis accelerometer (I2C), rotary angle sensor (analog, needs Grove Base Hat/ADC), IR reflective sensor (hand-wave trigger), USB-C power bank. Pi 5 has no headphone jack and no analog input. Power the servo from the bank/separate 5V rail, shared ground.
