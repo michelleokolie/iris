@@ -1,10 +1,11 @@
 # Interfaces (change here first)
 
-Two processes. Only the socket message crosses between them.
+Three processes. Only the socket messages cross between them; both clients connect to `io`.
 
 ```
-vision (C++)                          io (Python)
-capture -> detect -> decide  --Alert-->  actuate (servo, LEDs) + speak
+vision (C++)                                    io (Python)
+capture -> detect -> decide -> debounce --Alert--> fuse -> actuate (servo, LEDs) + speak
+ultrasonic (C++, hw/ultrasonic.cpp) ----Range-->   fuse
 ```
 
 ## vision (C++, inside one process)
