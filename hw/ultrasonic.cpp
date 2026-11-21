@@ -37,6 +37,7 @@ extern "C" {
 
 static constexpr double CM_PER_US = 0.0343 / 2.0;     // speed of sound, halved for the round trip
 static constexpr uint64_t EDGE_TIMEOUT_NS = 30'000'000;  // ~5 m round trip
+static constexpr double MIN_PULSE_US = 120;           // ~2 cm, the HC-SR04's minimum range: a shorter pulse is a glitch
 static constexpr double PERIOD_S = 0.060;             // HC-SR04 needs ~60 ms between pings
 static constexpr size_t FILTER_SIZE = 3;
 static constexpr size_t WINDOW_SIZE = 7;
@@ -140,7 +141,9 @@ static double read_cm(int trig) {
     if (!wait_edge(EDGE_TIMEOUT_NS)) return -1;  // rising
     double t_rise = now_s();
     if (!wait_edge(EDGE_TIMEOUT_NS)) return -1;  // falling
-    return (now_s() - t_rise) * 1e6 * CM_PER_US;
+    double pulse_us = (now_s() - t_rise) * 1e6;
+    if (pulse_us < MIN_PULSE_US) return -1;  // a near-zero edge pair is not an echo ("range none", never "range 0.0")
+    return pulse_us * CM_PER_US;
 }
 
 static int connect_io(const char* path) {
