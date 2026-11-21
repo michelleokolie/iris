@@ -6,12 +6,14 @@ exists, so the servo is software PWM from a thread.
 import threading
 import time
 
-LED_BLUE_1 = 17
-LED_BLUE_2 = 22
-LED_RED = 23
+LED_BLUE = 17
+LED_RED = 22
+LED_YELLOW = 23
 LED_GREEN = 24
 SERVO = 18
-OUTPUTS = (LED_BLUE_1, LED_BLUE_2, LED_RED, LED_GREEN, SERVO)
+
+ALERT_LEDS = (LED_GREEN, LED_YELLOW, LED_RED)
+OUTPUTS = (LED_BLUE, LED_RED, LED_YELLOW, LED_GREEN, SERVO)
 
 REST_US = 1000
 TAP_US = 1800
@@ -59,13 +61,32 @@ class Actuator:
             self._gpio.write(pin, False)
 
     def alert(self, level, direction):
+        """Update the alert state and display the corresponding LED."""
+        if level not in (0, 1, 2, 3):
+            raise ValueError(f"Invalid alert level: {level}")
+
         self._level = level
-        self._gpio.write(LED_GREEN, level == 0)
-        self._gpio.write(LED_RED, level >= 2)
+
+        # Turn off all alert LEDs
+        for led in ALERT_LEDS:
+            self._gpio.write(led, False)
+
+        # Turn on the LED corresponding to the current state
+        if level == 0:
+            self._gpio.write(LED_GREEN, True)
+
+        elif level == 1:
+            pass  # Far: all alert LEDs remain off
+
+        elif level == 2:
+            self._gpio.write(LED_YELLOW, True)
+
+        elif level == 3:
+            self._gpio.write(LED_RED, True)
 
     def describing(self, on):
-        self._gpio.write(LED_BLUE_1, on)
-        self._gpio.write(LED_BLUE_2, on)
+        """Control the blue LED used for describing."""
+        self._gpio.write(LED_BLUE, on)
 
     def _pulse(self, us):
         self._gpio.write(SERVO, True)
