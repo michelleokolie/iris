@@ -6,6 +6,7 @@
 // Sends to io over the UNIX socket, one line per measurement (docs/interfaces.md):
 //   "range <cm> <closing_cm_per_s>\n"   closing > 0 = getting closer
 //   "range none\n"                      no echo in time
+//   "range pending\n"                   jump awaiting confirmation
 //
 // Usage (root, io must be listening): sudo ./ultrasonic [socket_path] [trig_gpio] [echo_gpio]
 // Build: see docs/decisions.md (needs QNX's common/rpi_gpio built on the board).
@@ -202,10 +203,14 @@ int main(int argc, char** argv) {
         if (cm < 0) {
             filter.gap();
             send_line(fd, "range none\n");
-        } else if (auto out = filter.update(now_s(), cm)) {
-            char line[64];
-            std::snprintf(line, sizeof(line), "range %.1f %.1f\n", out->cm, out->closing);
-            send_line(fd, line);
+        } else {
+            if (auto out = filter.update(now_s(), cm)) {
+                char line[64];
+                std::snprintf(line, sizeof(line), "range %.1f %.1f\n", out->cm, out->closing);
+                send_line(fd, line);
+            } else {
+                send_line(fd, "range pending\n");
+            }
         }
         double rest = PERIOD_S - (now_s() - t0);
         if (rest > 0) usleep(static_cast<useconds_t>(rest * 1e6));
