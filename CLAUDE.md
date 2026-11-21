@@ -9,7 +9,7 @@ Prize targets: QNX embedded AI (must run on QNX, use an open-source QNX AI modul
 - Keep modules tiny. Only the interfaces in `docs/interfaces.md` cross module boundaries; change that file first if an interface must change.
 - One worktree and branch per stream (see `docs/tasks.md`). Never edit files owned by another stream.
 - Log decisions in `docs/decisions.md` (one line each) so a cleared session can resume cold.
-- Claude cannot touch the board. Hardware results come back from the humans; ask for exact error output.
+- Claude may run read-only and bench-test commands on the board over SSH (key auth) once the human has wired a part. Powering down and wiring stay with the human; ask for exact error output when something fails.
 
 ## Pipeline
 vision (C++): capture -> detect (onnxruntime) -> decide --Alert over /tmp/iris.sock--> io (Python): actuate (servo, LEDs) + speak (audio)
