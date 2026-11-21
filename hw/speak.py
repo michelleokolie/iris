@@ -2,8 +2,9 @@
 
 io serves a tiny web page on PORT. The phone, on the same Wi-Fi as the Pi, opens http://<pi address>:PORT/,
 taps Start once (phones only speak after a tap), and the page speaks every sentence io sends over a
-server-sent-events stream. A new sentence cancels the one still being spoken: the latest warning wins.
-The page asks the phone to keep its screen on (wake lock) and shows the connection state and last sentence.
+server-sent-events stream. A sentence is never cut off by an ordinary update: only warnings ("!") and falls
+interrupt; otherwise the newest sentence waits its turn. The page asks the phone to keep its screen on (wake
+lock, when the browser allows it) and shows the connection state and last sentence.
 """
 import queue
 import threading
