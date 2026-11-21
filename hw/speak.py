@@ -29,9 +29,26 @@ button{font-size:28px;padding:16px 28px;margin:8px}
 <div id=last></div>
 <script>
 const $ = id => document.getElementById(id);
-const speak = text => {  // the latest warning wins
-  speechSynthesis.cancel();
-  speechSynthesis.speak(new SpeechSynthesisUtterance(text));
+// A sentence is never cut off by an ordinary update: while one is being spoken the newest ordinary sentence
+// waits (older waiting ones are dropped) and is spoken when it ends. Only "Stop." and falls interrupt, and
+// not another urgent sentence still being spoken.
+let current = null, currentUrgent = false, pending = null;
+const play = (text, urgent) => {
+  const u = new SpeechSynthesisUtterance(text);
+  current = u; currentUrgent = urgent;
+  const done = () => {
+    if (current !== u) return;
+    current = null;
+    if (pending !== null) { const p = pending; pending = null; play(p, false); }
+  };
+  u.onend = done; u.onerror = done;
+  speechSynthesis.speak(u);
+};
+const speak = text => {
+  const urgent = /^(Stop\.|Fall)/.test(text);
+  if (current === null) play(text, urgent);
+  else if (urgent && !currentUrgent) { pending = null; speechSynthesis.cancel(); play(text, true); }
+  else pending = text;
 };
 const status = (text, cls) => { $("status").textContent = text; $("status").className = cls; };
 let started = false;
