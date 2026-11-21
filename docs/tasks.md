@@ -10,10 +10,12 @@ git worktree add ..\iris-submit -b mount-submission
 ```
 
 ## A. QNX lead (`bringup-qnx`) - THE BLOCKER
-- [ ] Boot QNX on the loaner Pi 5
-- [ ] Ask the QNX table: does onnxruntime count as the AI module, and which camera path is supported
-- [ ] USB webcam enumerates; capture a frame with `cv2.VideoCapture` (cv2 imports on the board; capture not yet verified)
-- [ ] Fix Python onnxruntime on the Pi (import fails: missing `onnxruntime_pybind11_state`), then run one image and note fps
+- [x] Boot QNX on the loaner Pi 5 (hostname `iris`, hotspot Wi-Fi, SSH + VNC work)
+- [ ] Ask the QNX table: does onnxruntime count as the AI module; broken python3-onnxruntime; can the CPU run above 1500 MHz
+- [x] C++ builds on the board with clang++ (see vision/README.md)
+- [x] USB webcam enumerates and shows a feed (C920, blue USB 3.0 port, sensor unit 5, `camera_mux -n 1 -u 5`)
+- [x] Run `vision/grab_frame` on the Pi (YUYV 640x480)
+- [x] onnxruntime runs on the Pi (C++ only; DEIMv2-Femto ~120 ms/frame)
 - [ ] Tell C when frames + onnxruntime work; tell B which GPIO/I2C access works
 
 ## B. Hardware (`hw-actuators`)
@@ -22,12 +24,17 @@ git worktree add ..\iris-submit -b mount-submission
 - [ ] Grove Base Hat or ADC for rotary; accelerometer on I2C; IR sensor
 - [ ] Each part works alone before QNX integration; photograph wiring
 - [ ] Power bank powers Pi + servo
+- [ ] `io` (Python): listen on /tmp/iris.sock, parse Alert lines per docs/interfaces.md, drive servo + LEDs
 
 ## C. Software (`vision-alert`)
-- [ ] `decide` per docs/interfaces.md, tested on laptop with webcam/test video
-- [ ] `detect` with an ONNX detector on laptop, then port to Pi
-- [ ] `speak`: phrases for Alert and fall; audio route (phone / dongle / Bluetooth)
-- [ ] Integrate `actuate` once B's pins are known
+`vision` is C++ on QNX (camera API is C only, Python onnxruntime is broken); see docs/interfaces.md and vision/README.md.
+- [x] capture: frame loop from sensor unit 5 (`vision/capture.cpp`)
+- [x] `decide` in C++ (port of PR #3), `vision/decide_test.cpp` passes PR #3's cases
+- [x] `detect` in C++: DEIMv2-Femto via onnxruntime, ~8 fps full loop on the Pi
+- [ ] Test Alert lines over /tmp/iris.sock against a listener, then against `io`
+- [x] "ahead" = sides within 0.05 (decide.cpp, interfaces.md)
+- [ ] Ultrasonic sensor for close obstacles the detector misses (update interfaces.md first)
+- [ ] `speak` (Python, in `io`): phrases for Alert and fall; audio route (phone / dongle / Bluetooth)
 
 ## D. Build + submission (`mount-submission`)
 - [ ] Cardboard/zip-tie chest mount first
