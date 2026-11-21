@@ -67,13 +67,21 @@ class Fusion:
                 self._range = None if r is None else (*r, t)
             else:
                 self._camera = parse_alert(line)
-            rng = self._range
-            if rng is not None and t - rng[2] > RANGE_STALE_S:
-                rng = None
-            fused = fuse(self._camera, None if rng is None else rng[:2])
-            if fused != self._last:
-                self._last = fused
-                self._actuator.alert(*fused)
+            self._update(t)
+
+    def refresh(self):
+        """Re-evaluate with the current time, so a range that stops arriving still expires."""
+        with self._lock:
+            self._update(self._now())
+
+    def _update(self, t):
+        rng = self._range
+        if rng is not None and t - rng[2] > RANGE_STALE_S:
+            rng = None
+        fused = fuse(self._camera, None if rng is None else rng[:2])
+        if fused != self._last:
+            self._last = fused
+            self._actuator.alert(*fused)
 
 
 def block_sigint():
@@ -104,6 +112,13 @@ def serve_thread(conn, fusion):
     serve_client(conn, fusion)
 
 
+def watchdog_thread(fusion):
+    block_sigint()
+    while True:
+        time.sleep(RANGE_STALE_S / 5)
+        fusion.refresh()
+
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--fake", action="store_true", help="use the recording fake GPIO backend")
@@ -114,6 +129,7 @@ if __name__ == "__main__":
     signal.pthread_sigmask(signal.SIG_UNBLOCK, {signal.SIGINT})
     fusion = Fusion(actuator, trace=bool(os.environ.get("IRIS_TRACE")))
     server = listen(args.socket)
+    threading.Thread(target=watchdog_thread, args=(fusion,), daemon=True).start()
     try:
         while True:
             threading.Thread(target=serve_thread, args=(server.accept()[0], fusion), daemon=True).start()

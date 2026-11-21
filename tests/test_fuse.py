@@ -69,6 +69,15 @@ def test_fusion_combines_both_sources():
     assert not g.state[actuate.LED_RED]
 
 
+def test_stale_range_expires_without_another_message():
+    f, g, clock = make_fusion()
+    f.on_line("range 40.0 0.0")
+    assert g.state[actuate.LED_RED]
+    clock[0] = io_main.RANGE_STALE_S + 0.1
+    f.refresh()
+    assert not g.state[actuate.LED_RED]
+
+
 def test_stale_range_is_ignored():
     f, g, clock = make_fusion()
     f.on_line("range 40.0 0.0")

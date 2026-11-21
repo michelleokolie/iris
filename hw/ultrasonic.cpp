@@ -95,10 +95,18 @@ static int connect_io(const char* path) {
     return fd;
 }
 
+// write() may send less than asked or be interrupted by a signal; a truncated line would
+// corrupt the stream, so loop until the whole line is out.
 static void send_line(int fd, const std::string& line) {
-    if (write(fd, line.data(), line.size()) != static_cast<ssize_t>(line.size())) {
-        std::perror("write to io");
-        std::exit(1);
+    size_t sent = 0;
+    while (sent < line.size()) {
+        ssize_t n = write(fd, line.data() + sent, line.size() - sent);
+        if (n < 0 && errno == EINTR) continue;
+        if (n < 0) {
+            std::perror("write to io");
+            std::exit(1);
+        }
+        sent += static_cast<size_t>(n);
     }
 }
 
