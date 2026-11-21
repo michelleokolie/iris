@@ -4,6 +4,7 @@ Real height ~ box height (fraction of the frame) * distance / F_NORM. If that di
 label should measure, the label (or the box-to-beam match) is probably wrong, so say "obstacle".
 Every constant here is an untested starting guess: calibrate F_NORM and BEAM_X on the board.
 """
+import random
 from collections import namedtuple
 
 Box = namedtuple("Box", "label x1 y1 x2 y2")  # label = COCO class index; coordinates normalized 0..1
@@ -48,6 +49,8 @@ def identify(box, rng):
 
 PATH_X = (0.33, 0.67)  # image x-range of the camera's in-path strip (same strip vision decides on)
 FALL = "Fall detected. Are you okay?"
+WARNINGS = ["Stop!", "Stop!", "Watch out!", "Careful!", "Hold on!"]  # level 3 opens with one, picked at random
+VERY_CLOSE_CM = 20  # nearer than this says "very close" instead of a number
 WORDS = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five", 6: "six", 7: "seven", 8: "eight", 9: "nine", 10: "ten"}
 
 
@@ -64,7 +67,7 @@ def position(box):
 
 
 def distance_text(cm):
-    """Nearest 10 cm under a metre, else nearest half metre: "40 centimeters", "one and a half meters"."""
+    """Nearest 10 cm from 20 cm to a metre, else nearest half metre: "40 centimeters", "one and a half meters"."""
     if cm < 100:
         return f"{round(cm / 10) * 10} centimeters"
     halves = round(cm / 50)  # distance in half metres
@@ -74,16 +77,16 @@ def distance_text(cm):
     return "one meter" if whole == 1 else f"{WORDS[whole]} meters"
 
 
-def phrase(level, where, name, rng):
-    """Short sentence for the wearer, e.g. "Stop. A chair to your left, about two meters away".
+def phrase(level, where, name, rng, pick=random.choice):
+    """Short sentence for the wearer, e.g. "Careful! A chair to your left, about two meters away".
 
-    where: position() text; rng: (cm, closing) or None."""
+    where: position() text; rng: (cm, closing) or None; pick chooses the level-3 warning word."""
     if level == 0:
         return "path clear"
     article = "an" if name[0] in "aeiou" else "a"
     text = f"{article} {name} {where}".capitalize()
     if rng is not None:
-        text += f", about {distance_text(rng[0])} away"
+        text += ", very close" if rng[0] < VERY_CLOSE_CM else f", about {distance_text(rng[0])} away"
     if level == 3:
-        text = "Stop. " + text
+        text = f"{pick(WARNINGS)} {text}"
     return text

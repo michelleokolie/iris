@@ -26,15 +26,26 @@ button{font-size:28px;padding:16px 28px;margin:8px}
 <button id=go>Start speaking</button>
 <button id=test>Test voice</button>
 <div id=note></div>
+<div id=voicename></div>
 <div id=last></div>
 <script>
 const $ = id => document.getElementById(id);
 // A sentence is never cut off by an ordinary update: while one is being spoken the newest ordinary sentence
-// waits (older waiting ones are dropped) and is spoken when it ends. Only "Stop." and falls interrupt, and
+// waits (older waiting ones are dropped) and is spoken when it ends. Only warnings ("!") and falls interrupt, and
 // not another urgent sentence still being spoken.
 let current = null, currentUrgent = false, pending = null;
+// The most natural English voice the phone offers: Siri/Premium/Enhanced/Natural first, else any English one.
+let voice = null;
+const pickVoice = () => {
+  const en = speechSynthesis.getVoices().filter(v => v.lang.startsWith("en"));
+  const score = v => (/siri|premium|enhanced|natural|neural/i.test(v.name) ? 2 : 0) + (v.lang === "en-US" ? 1 : 0);
+  voice = en.sort((a, b) => score(b) - score(a))[0] || null;
+};
+speechSynthesis.onvoiceschanged = pickVoice;
+pickVoice();
 const play = (text, urgent) => {
   const u = new SpeechSynthesisUtterance(text);
+  if (voice) u.voice = voice;
   current = u; currentUrgent = urgent;
   const done = () => {
     if (current !== u) return;
@@ -45,7 +56,7 @@ const play = (text, urgent) => {
   speechSynthesis.speak(u);
 };
 const speak = text => {
-  const urgent = /^(Stop\.|Fall)/.test(text);
+  const urgent = text.includes("!") || text.startsWith("Fall");
   if (current === null) play(text, urgent);
   else if (urgent && !currentUrgent) { pending = null; speechSynthesis.cancel(); play(text, true); }
   else pending = text;
@@ -60,9 +71,10 @@ const keepAwake = async () => {
 document.addEventListener("visibilitychange", () => {
   if (started && document.visibilityState === "visible") keepAwake();
 });
-$("test").onclick = () => speak("A person in front of you, about two meters away");
+$("test").onclick = () => speak("Careful! A person in front of you, about two meters away");
 $("go").onclick = async () => {
   started = true;
+  $("voicename").textContent = "Voice: " + (voice ? voice.name : "default");
   speak("Ready");
   keepAwake();
   const es = new EventSource("/events");
