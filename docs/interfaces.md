@@ -1,26 +1,46 @@
 # Interfaces (change here first)
 
-```python
-# capture -> detect
-Frame = numpy.ndarray            # HxWx3 uint8, BGR
+Two processes. Only the socket message crosses between them.
 
-# detect -> decide
-Box = (x1: float, y1: float, x2: float, y2: float, label: str, score: float)  # normalized 0..1
-detect(frame: Frame) -> list[Box]
-
-# decide -> actuate / speak
-Alert = (level: int, direction: str)   # level 0=clear, 1=far, 2=near, 3=imminent
-                                       # direction: "left" | "right" | "ahead" | "clear" (side with free space)
-decide(boxes: list[Box]) -> Alert
-
-# Rules
-# in path  = box overlaps center strip (x in 0.33..0.67)
-# close    = box height > 0.5 of frame, or y2 > 0.9
-# direction = side with more free space; "clear" when level 0
-
-# actuate: Alert -> servo tap rate + LEDs (green clear, red level>=2; blue while describing)
-# speak:   Alert | FallEvent -> short phrase string -> audio route
-FallEvent = str                        # "fall"
 ```
+vision (C++)                          io (Python)
+capture -> detect -> decide  --Alert-->  actuate (servo, LEDs) + speak
+```
+
+## vision (C++, inside one process)
+
+```cpp
+// capture -> detect
+struct Frame { int width, height; std::vector<uint8_t> bgr; };  // HxWx3, BGR, row-major
+
+// detect -> decide
+struct Box { float x1, y1, x2, y2; std::string label; float score; };  // normalized 0..1
+std::vector<Box> detect(const Frame& frame);
+
+// decide -> socket
+struct Alert { int level; std::string direction; };
+// level 0=clear, 1=far, 2=near, 3=imminent
+// direction "left" | "right" | "ahead" | "clear" (side with free space)
+Alert decide(const std::vector<Box>& boxes);
+```
+
+Rules for `decide`:
+- in path = box overlaps center strip (x in 0.33..0.67)
+- close = box height > 0.5 of frame, or y2 > 0.9
+- direction = side with more free space; "clear" when level 0
+
+## Socket (vision -> io)
+
+- UNIX domain stream socket at `/tmp/iris.sock`. `io` creates and listens; `vision` connects.
+- One ASCII line per message, `\n`-terminated, single spaces, nothing else:
+  - Alert: `<level> <direction>\n`, level `0`-`3`, direction `left|right|ahead|clear`. Example: `2 left\n`.
+  - Fall (later): `fall\n`.
+- `vision` sends an Alert only when it changes from the last one sent.
+- `0 clear\n` is the only valid level-0 message; `clear` never goes with level > 0.
+
+## io (Python)
+
+- actuate: Alert -> servo tap rate + LEDs (green clear, red level>=2; blue while describing)
+- speak: Alert | fall -> short phrase string -> audio route
 
 Audio route is undecided: USB dongle, Bluetooth, or text to a phone over Wi-Fi (see docs/decisions.md).
