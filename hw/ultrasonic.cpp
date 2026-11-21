@@ -1,7 +1,7 @@
 // HC-SR04 reader for QNX (Pi 5). Event-driven like QNX's own sample
 // (qnx/Raspberry-Pi-Hardware-Component-Samples, hc-sr04_ultrasonic_sensor/c): rpi_gpio sends a
 // pulse to a QNX channel on each echo edge, so there is no busy-wait and no GIL contention
-// with io. Same filtering as hw/ultrasonic.py: median of 3, closing speed over the last 7.
+// with io. Filtering (from the team's Arduino sketch): median of 3, closing speed over the last 7.
 //
 // Sends to io over the UNIX socket, one line per measurement (docs/interfaces.md):
 //   "range <cm> <closing_cm_per_s>\n"   closing > 0 = getting closer

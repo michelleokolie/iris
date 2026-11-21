@@ -10,7 +10,7 @@ mode = sys.argv[1]
 a = actuate.Actuator()
 
 if mode == "led":
-    for pin in (actuate.LED_BLUE_1, actuate.LED_BLUE_2, actuate.LED_RED, actuate.LED_GREEN):
+    for pin in (actuate.LED_RED, actuate.LED_GREEN):
         print("pin", pin)
         a._gpio.write(pin, True)
         time.sleep(1)
@@ -25,6 +25,4 @@ elif mode == "alerts":
         print("alert", level, direction)
         a.alert(level, direction)
         time.sleep(4)
-    a.describing(True)
-    time.sleep(2)
-    a.describing(False)
+    a.off()

@@ -14,6 +14,7 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <cerrno>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -34,6 +35,30 @@ static int connect_io(const char* path) {
         std::exit(1);
     }
     return fd;
+}
+
+// write() may send less than asked or be interrupted; loop so a line is never truncated.
+static void send_line(int fd, const std::string& line) {
+    size_t sent = 0;
+    while (sent < line.size()) {
+        ssize_t n = write(fd, line.data() + sent, line.size() - sent);
+        if (n < 0 && errno == EINTR) continue;
+        if (n < 0) {
+            std::perror("write to io");
+            std::exit(1);
+        }
+        sent += static_cast<size_t>(n);
+    }
+}
+
+// "box <label> <x1> <y1> <x2> <y2>" for the box driving the Alert, "box none" if nothing is in path.
+// Sent every frame, independent of the debounce, so io has fresh geometry for size/label checks.
+static std::string box_line(const std::optional<Box>& b) {
+    if (!b) return "box none\n";
+    char buf[96];
+    // Six decimals: with three, a thin box (x1 = 0.9996, x2 = 0.9998) rounds to zero width and io rejects it.
+    std::snprintf(buf, sizeof(buf), "box %s %.6f %.6f %.6f %.6f\n", b->label.c_str(), b->x1, b->y1, b->x2, b->y2);
+    return buf;
 }
 
 // Debug only: draw box outlines (red, 2 px) and write the frame as a PPM.
@@ -83,14 +108,12 @@ int main(int argc, char** argv) {
             write_debug_ppm(frame, boxes);
         }
 
+        if (fd >= 0) send_line(fd, box_line(primary_box(boxes)));
+
         std::optional<Alert> stable = debounce.update(alert);
         if (!stable) continue;
         std::printf("  -> send %d %s\n", stable->level, stable->direction.c_str());
         if (fd < 0) continue;
-        std::string line = std::to_string(stable->level) + " " + stable->direction + "\n";
-        if (write(fd, line.data(), line.size()) != static_cast<ssize_t>(line.size())) {
-            std::perror("write to io");
-            return 1;
-        }
+        send_line(fd, std::to_string(stable->level) + " " + stable->direction + "\n");
     }
 }

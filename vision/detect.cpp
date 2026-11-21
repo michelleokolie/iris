@@ -1,5 +1,6 @@
 #include "detect.h"
 
+#include <algorithm>
 #include <array>
 #include <cstdio>
 #include <cstdlib>
@@ -65,8 +66,12 @@ std::vector<Box> Detector::detect(const Frame& frame) {
     for (size_t i = 0; i < n; ++i) {
         if (scores[i] < SCORE_THRESHOLD) continue;
         const float* b = &boxes[i * 4];
-        out.push_back({b[0] / frame.width, b[1] / frame.height, b[2] / frame.width, b[3] / frame.height,
-                       std::to_string(labels[i]), scores[i]});
+        // The model can return boxes a hair outside the frame (seen: x1 = -0.004); clip to it.
+        auto unit = [](float v) { return std::clamp(v, 0.0f, 1.0f); };
+        Box box{unit(b[0] / frame.width), unit(b[1] / frame.height), unit(b[2] / frame.width),
+                unit(b[3] / frame.height), std::to_string(labels[i]), scores[i]};
+        if (box.x2 <= box.x1 || box.y2 <= box.y1) continue;  // nothing of it is inside the frame
+        out.push_back(box);
     }
     return out;
 }
