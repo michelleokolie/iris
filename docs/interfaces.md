@@ -37,7 +37,7 @@ Rules for `decide`:
   - Alert (vision): `<level> <direction>\n`, level `0`-`3`, direction `left|right|ahead|clear`. Example: `2 left\n`.
   - Range (ultrasonic): `range <cm> <closing_cm_per_s>\n` (closing > 0 = getting closer), or `range none\n` when no echo came back. Example: `range 84.5 31.0\n`.
   - Fall (later): `fall\n`.
-- `vision` sends an Alert only when it changes from the last one sent. `ultrasonic` sends one Range per measurement (~every 60 ms).
+- `vision` sends an Alert only when the debounced Alert changes: level up immediately, level down or back to clear after 3 frames in a row (~0.4 s), same level with a new direction after 2 (~0.25 s). Tunable with VISION_DEBOUNCE=up,down,turn. `ultrasonic` sends one Range per measurement (~every 60 ms).
 - `0 clear\n` is the only valid level-0 message; `clear` never goes with level > 0.
 
 ## io (Python)
