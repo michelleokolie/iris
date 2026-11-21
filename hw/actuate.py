@@ -36,8 +36,8 @@ class DevGpio:
 
 
 class Actuator:
-    def __init__(self, gpio=None):
-        self._gpio = gpio if gpio is not None else DevGpio()
+    def __init__(self):
+        self._gpio = DevGpio()
         for pin in OUTPUTS:
             self._gpio.set_out(pin)
             self._gpio.write(pin, False)
