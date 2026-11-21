@@ -27,13 +27,14 @@ def range_level(cm, closing, prev=0):
 
 
 def fuse(camera, rng, prev=0):
-    """The ultrasonic sets near/imminent; the camera can only add "far" and the direction.
+    """Either sensor can raise the level, neither can lower the other's (the sonar beam is narrower than the
+    camera's in-path strip, so a person off-centre is seen by the camera only). The camera gives the direction.
 
     prev = the previous range level, passed through to range_level."""
     cam_level, direction = camera
     if rng is None:
         return camera
-    level = max(range_level(*rng, prev), min(cam_level, 1))
+    level = max(range_level(*rng, prev), cam_level)
     if level == 0:
         return 0, "clear"
     if cam_level == 0:
