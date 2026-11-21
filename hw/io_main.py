@@ -6,7 +6,7 @@ accelerometer and reports falls. Line formats (docs/interfaces.md):
   vision:     "<level> <direction>\n"  level 0-3, direction left|right|ahead|clear;
               "0 clear" is the only level-0 message
               "box <label> <x1> <y1> <x2> <y2>\n" or "box none\n": the box driving the Alert
-  ultrasonic: "range <cm> <closing_cm_per_s>\n", "range none\n", or "range pending\n"
+  ultrasonic: "range <cm> <closing_cm_per_s>\n" or "range none\n"
 IRIS_TRACE=1 prints a monotonic timestamp per received line, for latency measurements.
 """
 import argparse
@@ -53,13 +53,11 @@ def parse_box(line):
 
 
 def parse_range(line):
-    """Returns (cm, closing_cm_per_s), None for "range none", or "pending" for a jump await."""
+    """Returns (cm, closing_cm_per_s), or None for "range none"."""
     tag, *fields = line.split(" ")
     assert tag == "range", line
     if fields == ["none"]:
         return None
-    if fields == ["pending"]:
-        return "pending"
     cm_s, closing_s = fields
     cm, closing = float(cm_s), float(closing_s)
     assert cm > 0, line
@@ -91,9 +89,7 @@ class Fusion:
         with self._lock:
             if line.startswith("range "):
                 r = parse_range(line)
-                if r == "pending":
-                    self._range = None
-                elif r is not None:  # "range none" keeps the last good range until RANGE_HOLD_S passes
+                if r is not None:  # "range none" keeps the last good range until RANGE_HOLD_S passes
                     self._range = (*r, t)
             elif line.startswith("box "):
                 b = parse_box(line)

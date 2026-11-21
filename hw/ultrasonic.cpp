@@ -6,7 +6,6 @@
 // Sends to io over the UNIX socket, one line per measurement (docs/interfaces.md):
 //   "range <cm> <closing_cm_per_s>\n"   closing > 0 = getting closer
 //   "range none\n"                      no echo in time
-//   "range pending\n"                   jump awaiting confirmation
 //
 // Usage (root, io must be listening): sudo ./ultrasonic [socket_path] [trig_gpio] [echo_gpio]
 // Build: see docs/decisions.md (needs QNX's common/rpi_gpio built on the board).
@@ -68,15 +67,12 @@ public:
     // One raw reading; an Output when there is a value to send, nothing while a jump awaits confirmation
     // or the median has fewer than FILTER_SIZE readings.
     std::optional<Output> update(double t, double cm) {
-if (pending_) {
-            if (std::abs(cm - *pending_) > CONFIRM_CM) {
+        if (accepted_ && std::abs(cm - *accepted_) > JUMP_CM) {
+            bool confirmed = pending_ && std::abs(cm - *pending_) <= CONFIRM_CM;
+            if (!confirmed) {
                 pending_ = cm;
                 return std::nullopt;
             }
-        } else if (accepted_ && std::abs(cm - *accepted_) > JUMP_CM) {
-            pending_ = cm;
-            return std::nullopt;
-        }
             raw_.clear();  // the new surface starts a new window
             history_.clear();
             raw_.push_back(*pending_);
@@ -203,14 +199,10 @@ int main(int argc, char** argv) {
         if (cm < 0) {
             filter.gap();
             send_line(fd, "range none\n");
-        } else {
-            if (auto out = filter.update(now_s(), cm)) {
-                char line[64];
-                std::snprintf(line, sizeof(line), "range %.1f %.1f\n", out->cm, out->closing);
-                send_line(fd, line);
-            } else {
-                send_line(fd, "range pending\n");
-            }
+        } else if (auto out = filter.update(now_s(), cm)) {
+            char line[64];
+            std::snprintf(line, sizeof(line), "range %.1f %.1f\n", out->cm, out->closing);
+            send_line(fd, line);
         }
         double rest = PERIOD_S - (now_s() - t0);
         if (rest > 0) usleep(static_cast<useconds_t>(rest * 1e6));
