@@ -19,11 +19,13 @@ import time
 from actuate import Actuator
 from describe import Box, identify, phrase
 from fake_gpio import FakeGpio
-from fuse import fuse
+from fuse import fuse, range_level
 
 SOCKET_PATH = "/tmp/iris.sock"
 DIRECTIONS = ("left", "right", "ahead", "clear")
-RANGE_STALE_S = 0.5  # a range older than this is ignored (sensor stopped or died)
+BOX_STALE_S = 0.5    # a box older than this is ignored (vision sends one every frame, ~0.12 s)
+RANGE_HOLD_S = 1.0   # the last good range is kept this long, through "range none" gaps (41% no-echo on the board)
+SAY_MIN_GAP_S = 1.0  # at most one sentence per this, unless the level goes up
 
 
 def parse_alert(line):
@@ -73,6 +75,9 @@ class Fusion:
         self._range = None  # (cm, closing, received_at) or None
         self._last = None
         self._last_key = None
+        self._range_level = 0  # last range level, for hysteresis
+        self._said_level = 0
+        self._said_t = None
 
     def on_line(self, line):
         t = self._now()
@@ -81,7 +86,8 @@ class Fusion:
         with self._lock:
             if line.startswith("range "):
                 r = parse_range(line)
-                self._range = None if r is None else (*r, t)
+                if r is not None:  # "range none" keeps the last good range until RANGE_HOLD_S passes
+                    self._range = (*r, t)
             elif line.startswith("box "):
                 b = parse_box(line)
                 self._box = None if b is None else (b, t)
@@ -96,23 +102,29 @@ class Fusion:
 
     def _update(self, t):
         rng = self._range
-        if rng is not None and t - rng[2] > RANGE_STALE_S:
+        if rng is not None and t - rng[2] > RANGE_HOLD_S:
             rng = None
         rng = None if rng is None else rng[:2]
         box = self._box
-        if box is not None and t - box[1] > RANGE_STALE_S:
+        if box is not None and t - box[1] > BOX_STALE_S:
             box = None
         box = None if box is None else box[0]
 
-        fused = fuse(self._camera, rng)
+        fused = fuse(self._camera, rng, self._range_level)
+        self._range_level = 0 if rng is None else range_level(*rng, self._range_level)
         if fused != self._last:
             self._last = fused
             self._actuator.alert(*fused)
         name = identify(box, rng)
         key = (fused, name, rng is not None)
-        if key != self._last_key:  # speak on a change of level, direction, name or having a distance, not of its value
+        if key == self._last_key:  # speak on a change of level, direction, name or having a distance, not of its value
+            return
+        escalates = fused[0] > self._said_level
+        if escalates or self._said_t is None or t - self._said_t >= SAY_MIN_GAP_S:
             self._last_key = key
-            self._say(phrase(*fused, name, rng))
+            self._said_level = fused[0]
+            self._said_t = t
+            self._say(phrase(*fused, name, rng))  # otherwise a later refresh() says it once the gap has passed
 
 
 def block_sigint():
@@ -146,7 +158,7 @@ def serve_thread(conn, fusion):
 def watchdog_thread(fusion):
     block_sigint()
     while True:
-        time.sleep(RANGE_STALE_S / 5)
+        time.sleep(BOX_STALE_S / 5)
         fusion.refresh()
 
 
