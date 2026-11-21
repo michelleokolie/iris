@@ -21,3 +21,5 @@ Stop `camera_mux` first. Model needs both `deimv2_femto.onnx` and `deimv2_femto.
 ./vision deimv2_femto.onnx                  # print only
 ./vision deimv2_femto.onnx /tmp/iris.sock   # also send Alerts to io (io must be listening)
 ```
+
+Start `io` first (`hw/io_main.py`), then `vision`. The ultrasonic reader (`hw/ultrasonic.cpp`) also connects to `io` on `/tmp/iris.sock`; `io` combines it with the camera Alert (`hw/fuse.py`). Besides the debounced Alert, `vision` sends a `box` line every frame (the in-path box that drives the Alert, see docs/interfaces.md) so `io` can check labels and sizes against the ultrasonic distance.
