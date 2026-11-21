@@ -12,8 +12,8 @@ git worktree add ..\iris-submit -b mount-submission
 ## A. QNX lead (`bringup-qnx`) - THE BLOCKER
 - [ ] Boot QNX on the loaner Pi 5
 - [ ] Ask the QNX table: does onnxruntime count as the AI module, and which camera path is supported
-- [ ] USB webcam enumerates; capture a frame
-- [ ] onnxruntime runs one image on the Pi; note fps
+- [ ] USB webcam enumerates; capture a frame with `cv2.VideoCapture` (cv2 imports on the board; capture not yet verified)
+- [ ] Fix Python onnxruntime on the Pi (import fails: missing `onnxruntime_pybind11_state`), then run one image and note fps
 - [ ] Tell C when frames + onnxruntime work; tell B which GPIO/I2C access works
 
 ## B. Hardware (`hw-actuators`)
