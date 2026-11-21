@@ -11,11 +11,13 @@ LED_BLUE_2 = 22
 LED_RED = 23
 LED_GREEN = 24
 SERVO = 18
+OUTPUTS = (LED_BLUE_1, LED_BLUE_2, LED_RED, LED_GREEN, SERVO)
 
 REST_US = 1000
 TAP_US = 1800
 PERIOD_S = 0.020
 DWELL_PULSES = 10           # 0.2 s to let the horn reach each position
+REST_SLICE_S = 0.05         # granularity for noticing a level change between taps
 TAP_CYCLE_S = {1: 1.5, 2: 0.8, 3: 0.4}  # level -> time per tap
 
 
@@ -39,12 +41,22 @@ class Actuator:
     def __init__(self, gpio=None, sleep=time.sleep, threaded=True):
         self._gpio = gpio if gpio is not None else DevGpio()
         self._sleep = sleep
-        for pin in (LED_BLUE_1, LED_BLUE_2, LED_RED, LED_GREEN, SERVO):
+        for pin in OUTPUTS:
             self._gpio.set_out(pin)
             self._gpio.write(pin, False)
         self._level = 0
-        if threaded:
-            threading.Thread(target=self._servo_loop, daemon=True).start()
+        self._stopped = False
+        self._thread = threading.Thread(target=self._servo_loop, daemon=True) if threaded else None
+        if self._thread is not None:
+            self._thread.start()
+
+    def off(self):
+        """Stop the servo thread and switch every output pin off (GPIO keeps its last state)."""
+        self._stopped = True
+        if self._thread is not None:
+            self._thread.join()
+        for pin in OUTPUTS:
+            self._gpio.write(pin, False)
 
     def alert(self, level, direction):
         self._level = level
@@ -64,11 +76,18 @@ class Actuator:
     def _tap(self, level):
         for us in (TAP_US, REST_US):
             for _ in range(DWELL_PULSES):
+                if self._stopped:
+                    return
                 self._pulse(us)
-        self._sleep(max(0.0, TAP_CYCLE_S[level] - 2 * DWELL_PULSES * PERIOD_S))
+        # Wait out the rest of the cycle in slices so a level change starts the next tap early.
+        rest = max(0.0, TAP_CYCLE_S[level] - 2 * DWELL_PULSES * PERIOD_S)
+        for _ in range(round(rest / REST_SLICE_S)):
+            if self._stopped or self._level != level:
+                return
+            self._sleep(REST_SLICE_S)
 
     def _servo_loop(self):
-        while True:
+        while not self._stopped:
             level = self._level
             if level == 0:
                 self._sleep(0.05)

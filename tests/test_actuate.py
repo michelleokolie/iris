@@ -1,5 +1,6 @@
 import os
 import sys
+import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "hw"))
 
@@ -50,10 +51,37 @@ def test_servo_pulse_widths():
     assert g.state[actuate.SERVO] is False
 
 
+def test_off_switches_every_output_off():
+    a, g, _ = make()
+    a.alert(3, "ahead")
+    a.describing(True)
+    a.off()
+    assert all(g.state[pin] is False for pin in actuate.OUTPUTS)
+
+
+def test_off_stops_servo_thread():
+    g = FakeGpio()
+    a = Actuator(gpio=g, sleep=lambda s: time.sleep(s / 20), threaded=True)
+    a.alert(3, "ahead")
+    time.sleep(0.05)
+    a.off()
+    assert not a._thread.is_alive()
+    assert all(g.state[pin] is False for pin in actuate.OUTPUTS)
+
+
 def test_tap_rate_increases_with_level():
     cycles = []
     for level in (1, 2, 3):
         a, _, sleeps = make()
+        a.alert(level, "left")
         a._tap(level)
         cycles.append(sum(sleeps))
     assert cycles[0] > cycles[1] > cycles[2]
+
+
+def test_tap_cuts_rest_short_when_level_changes():
+    a, _, sleeps = make()
+    a.alert(1, "left")
+    a._sleep = lambda s: (sleeps.append(s), a.alert(3, "left"))
+    a._tap(1)
+    assert sum(sleeps) < 0.4 + 2 * actuate.REST_SLICE_S + 0.01  # pulses plus at most one slice

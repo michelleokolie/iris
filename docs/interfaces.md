@@ -30,18 +30,20 @@ Rules for `decide`:
 - level: 0 if nothing in path; 3 if an in-path box is close and y2 > 0.9; 2 if an in-path box is close; else 1
 - direction = side with more free space (box width overlapping x 0..0.5 vs 0.5..1, all boxes); "ahead" when the two sides are within 0.05 of each other (obstacle roughly centred); "clear" when level 0
 
-## Socket (vision -> io)
+## Socket (clients -> io)
 
-- UNIX domain stream socket at `/tmp/iris.sock`. `io` creates and listens; `vision` connects.
+- UNIX domain stream socket at `/tmp/iris.sock`. `io` creates and listens, one thread per client; `vision` and the C++ `ultrasonic` reader (`hw/ultrasonic.cpp`) both connect.
 - One ASCII line per message, `\n`-terminated, single spaces, nothing else:
-  - Alert: `<level> <direction>\n`, level `0`-`3`, direction `left|right|ahead|clear`. Example: `2 left\n`.
+  - Alert (vision): `<level> <direction>\n`, level `0`-`3`, direction `left|right|ahead|clear`. Example: `2 left\n`.
+  - Range (ultrasonic): `range <cm> <closing_cm_per_s>\n` (closing > 0 = getting closer), or `range none\n` when no echo came back. Example: `range 84.5 31.0\n`.
   - Fall (later): `fall\n`.
-- `vision` sends an Alert only when the debounced Alert changes: level up immediately, level down or back to clear after 3 frames in a row (~0.4 s), same level with a new direction after 2 (~0.25 s). Tunable with VISION_DEBOUNCE=up,down,turn.
+- `vision` sends an Alert only when the debounced Alert changes: level up immediately, level down or back to clear after 3 frames in a row (~0.4 s), same level with a new direction after 2 (~0.25 s). Tunable with VISION_DEBOUNCE=up,down,turn. `ultrasonic` sends one Range per measurement (~every 60 ms).
 - `0 clear\n` is the only valid level-0 message; `clear` never goes with level > 0.
 
 ## io (Python)
 
-- actuate: Alert -> servo tap rate + LEDs (green clear, red level>=2; blue while describing)
+- fuse (`hw/fuse.py`): camera Alert + Range -> the Alert to actuate. The ultrasonic sets near/imminent (distance and time-to-contact); the camera can only add "far" (level 1) and gives the direction; an obstacle only the ultrasonic sees is direction `ahead`. A missing or stale (>0.5 s) range falls back to the camera Alert alone. Thresholds are starting guesses, tuned on the board.
+- actuate: fused Alert -> servo tap rate + LEDs (green clear, red level>=2; blue while describing)
 - speak: Alert | fall -> short phrase string -> audio route
 
 Audio route is undecided: USB dongle, Bluetooth, or text to a phone over Wi-Fi (see docs/decisions.md).
