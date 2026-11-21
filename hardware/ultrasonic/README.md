@@ -2,9 +2,9 @@ Ultrasonic Distance Sensor
 
 This module uses an HC-SR04 ultrasonic sensor connected to an ELEGOO UNO R3 (Arduino-compatible) to measure the distance to nearby objects AND now reports their speed.
 
-The sensor sends an ultrasonic pulse and measures the time required for its echo to return. The Arduino calculates the approximate distance in centimeters and prints the result through serial communication. It also stores 1 older distance measure every 400ms to calculate speed.
+The sensor sends an ultrasonic pulse and measures the time required for its echo to return. The Arduino calculates the approximate distance in centimeters and prints the result through serial communication. It also stores 7 old distance measures and updates to calculate the objects speed every 60ms via the entire past 7 distance chunks.
 
-This is an initial hardware prototyme. The distance measurment functionality will later be integrated into the Raspberry Pi 5 running QNX. The speed calculation must be updated so it updates on a rolling basis, not every 400ms. The distances and speeds will also be used to categorize readings into various warning states.
+This is an initial hardware prototyme. The distance measurment functionality will later be integrated into the Raspberry Pi 5 running QNX. The distances and speeds will also be used to categorize readings into various warning states.
 
 Wiring:
 
