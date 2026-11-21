@@ -17,6 +17,4 @@ for alert in ALERTS:
     print("alert", alert)
     a.alert(*alert)
     time.sleep(pause)
-a.describing(True)
-time.sleep(pause)
-a.describing(False)
+a.off()

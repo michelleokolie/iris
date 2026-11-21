@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# built on the Pi
+/hw/accel
+/hw/i2cscan
+/hw/ultrasonic
+/vision/vision
+/vision/grab_frame
+/vision/ort_smoke

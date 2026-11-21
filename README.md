@@ -4,12 +4,6 @@
 
 Runs on the Pi 5 under QNX 8.0 (Python 3.14, gcc on board). Pin map and unverified items: `docs/decisions.md`.
 
-### Tests (any machine, no hardware)
-```
-python -m venv venv && venv/Scripts/pip install pytest   # or venv/bin/pip
-venv/Scripts/python -m pytest -q
-```
-
 ### Fake-GPIO demo (no board)
 ```
 python hw/demo_alerts.py --fake

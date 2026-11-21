@@ -29,7 +29,7 @@ git worktree add ..\iris-submit -b mount-submission
 ## C. Software (`vision-alert`)
 `vision` is C++ on QNX (camera API is C only, Python onnxruntime is broken); see docs/interfaces.md and vision/README.md.
 - [x] capture: frame loop from sensor unit 5 (`vision/capture.cpp`)
-- [x] `decide` in C++ (port of PR #3), `vision/decide_test.cpp` passes PR #3's cases
+- [x] `decide` in C++ (port of PR #3)
 - [x] `detect` in C++: DEIMv2-Femto via onnxruntime, ~8 fps full loop on the Pi
 - [x] Alert lines over /tmp/iris.sock drive io + real LEDs on the board
 - [ ] Debounce Alerts: written (vision/debounce.*), verify on the board

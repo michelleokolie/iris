@@ -16,7 +16,7 @@ vision (C++): capture -> detect (onnxruntime) -> decide --Alert over /tmp/iris.s
 ultrasonic (C++, hw/ultrasonic.cpp) --Range over /tmp/iris.sock--> io (Python): fuse
 
 ## Hardware
-Pi 5 + QNX, 1 USB webcam (MVP; 2nd camera is stretch), servo (tap arm), 4 LEDs (2 blue, 1 red, 1 green), 3-axis accelerometer (I2C), rotary angle sensor (analog, needs Grove Base Hat/ADC), IR reflective sensor (hand-wave trigger), USB-C power bank. Pi 5 has no headphone jack and no analog input. Power the servo from the bank/separate 5V rail, shared ground.
+Pi 5 + QNX, 1 USB webcam (MVP; 2nd camera is stretch), servo (tap arm), 2 LEDs (1 red, 1 green), 3-axis accelerometer (I2C), rotary angle sensor (analog, needs Grove Base Hat/ADC), IR reflective sensor (hand-wave trigger), USB-C power bank. Pi 5 has no headphone jack and no analog input. Power the servo from the bank/separate 5V rail, shared ground.
 
 ## Context hygiene
 `/clear` between streams. Start each stream by reading this file, `docs/interfaces.md`, `docs/tasks.md`.

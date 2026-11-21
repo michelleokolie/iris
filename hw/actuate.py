@@ -6,12 +6,10 @@ exists, so the servo is software PWM from a thread.
 import threading
 import time
 
-LED_BLUE_1 = 17
-LED_BLUE_2 = 22
 LED_RED = 23
 LED_GREEN = 24
 SERVO = 18
-OUTPUTS = (LED_BLUE_1, LED_BLUE_2, LED_RED, LED_GREEN, SERVO)
+OUTPUTS = (LED_RED, LED_GREEN, SERVO)
 
 REST_US = 1000
 TAP_US = 1800
@@ -38,23 +36,20 @@ class DevGpio:
 
 
 class Actuator:
-    def __init__(self, gpio=None, sleep=time.sleep, threaded=True):
+    def __init__(self, gpio=None):
         self._gpio = gpio if gpio is not None else DevGpio()
-        self._sleep = sleep
         for pin in OUTPUTS:
             self._gpio.set_out(pin)
             self._gpio.write(pin, False)
         self._level = 0
         self._stopped = False
-        self._thread = threading.Thread(target=self._servo_loop, daemon=True) if threaded else None
-        if self._thread is not None:
-            self._thread.start()
+        self._thread = threading.Thread(target=self._servo_loop, daemon=True)
+        self._thread.start()
 
     def off(self):
         """Stop the servo thread and switch every output pin off (GPIO keeps its last state)."""
         self._stopped = True
-        if self._thread is not None:
-            self._thread.join()
+        self._thread.join()
         for pin in OUTPUTS:
             self._gpio.write(pin, False)
 
@@ -63,15 +58,11 @@ class Actuator:
         self._gpio.write(LED_GREEN, level == 0)
         self._gpio.write(LED_RED, level >= 2)
 
-    def describing(self, on):
-        self._gpio.write(LED_BLUE_1, on)
-        self._gpio.write(LED_BLUE_2, on)
-
     def _pulse(self, us):
         self._gpio.write(SERVO, True)
-        self._sleep(us / 1e6)
+        time.sleep(us / 1e6)
         self._gpio.write(SERVO, False)
-        self._sleep(PERIOD_S - us / 1e6)
+        time.sleep(PERIOD_S - us / 1e6)
 
     def _tap(self, level):
         for us in (TAP_US, REST_US):
@@ -84,12 +75,12 @@ class Actuator:
         for _ in range(round(rest / REST_SLICE_S)):
             if self._stopped or self._level != level:
                 return
-            self._sleep(REST_SLICE_S)
+            time.sleep(REST_SLICE_S)
 
     def _servo_loop(self):
         while not self._stopped:
             level = self._level
             if level == 0:
-                self._sleep(0.05)
+                time.sleep(0.05)
                 continue
             self._tap(level)

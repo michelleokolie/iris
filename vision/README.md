@@ -3,7 +3,7 @@
 capture -> detect (DEIMv2 via onnxruntime) -> decide, sends Alert lines to `/tmp/iris.sock` (see docs/interfaces.md).
 
 Files: `capture.*` (QNX camera API), `detect.*` (DEIMv2), `decide.*` (rules), `debounce.*` (stable Alerts), `main.cpp` (loop + socket).
-Tools: `grab_frame.cpp` (save one frame), `ort_smoke.cpp` (time any ONNX model), `decide_test.cpp`, `debounce_test.cpp` (run anywhere).
+Tools: `grab_frame.cpp` (save one frame), `ort_smoke.cpp` (time any ONNX model).
 
 ## Build on the Pi
 
