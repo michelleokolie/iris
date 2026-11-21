@@ -1,8 +1,8 @@
 """io process: listens on a UNIX socket and actuates the fused Alert.
 
-Usage: python hw/io_main.py [--fake] [--socket PATH]
-Several clients may connect at once (vision, ultrasonic), one thread each. Line formats
-(docs/interfaces.md):
+Usage: sudo python3 hw/io_main.py [--socket PATH]   (needs hw/accel built: gcc -o hw/accel hw/accel.c)
+Several clients may connect at once (vision, ultrasonic), one thread each. A thread reads the
+accelerometer and reports falls. Line formats (docs/interfaces.md):
   vision:     "<level> <direction>\n"  level 0-3, direction left|right|ahead|clear;
               "0 clear" is the only level-0 message
               "box <label> <x1> <y1> <x2> <y2>\n" or "box none\n": the box driving the Alert
@@ -16,12 +16,15 @@ import socket
 import threading
 import time
 
+from accel import Accel
 from actuate import Actuator
 from describe import Box, identify, phrase
-from fake_gpio import FakeGpio
+from fall import FallDetector
 from fuse import fuse, range_level
 
 SOCKET_PATH = "/tmp/iris.sock"
+ACCEL_HELPER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "accel")
+ACCEL_HZ = 25
 DIRECTIONS = ("left", "right", "ahead", "clear")
 BOX_STALE_S = 0.5    # a box older than this is ignored (vision sends one every frame, ~0.12 s)
 RANGE_HOLD_S = 1.0   # the last good range is kept this long, through "range none" gaps (41% no-echo on the board)
@@ -100,6 +103,12 @@ class Fusion:
         with self._lock:
             self._update(self._now())
 
+    def on_fall(self):
+        with self._lock:
+            if self._trace:
+                print(f"{self._now():.4f} fall", flush=True)
+            self._say("Fall detected")
+
     def _update(self, t):
         rng = self._range
         if rng is not None and t - rng[2] > RANGE_HOLD_S:
@@ -162,18 +171,27 @@ def watchdog_thread(fusion):
         fusion.refresh()
 
 
+def fall_thread(accel, fusion):
+    block_sigint()
+    detector = FallDetector()
+    while True:
+        if detector.update(time.monotonic(), accel.read()):
+            fusion.on_fall()
+
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("--fake", action="store_true", help="use the recording fake GPIO backend")
     ap.add_argument("--socket", default=SOCKET_PATH)
     args = ap.parse_args()
     block_sigint()  # the servo thread inherits the mask; main unblocks it below
-    actuator = Actuator(FakeGpio() if args.fake else None)
+    actuator = Actuator()
     signal.pthread_sigmask(signal.SIG_UNBLOCK, {signal.SIGINT})
+    accel = Accel(helper=ACCEL_HELPER, hz=ACCEL_HZ)  # created here so a missing helper stops io at startup
     # No audio route yet (docs/decisions.md), so phrases are printed; swap print for the speaker later.
     fusion = Fusion(actuator, trace=bool(os.environ.get("IRIS_TRACE")), say=lambda text: print(text, flush=True))
     server = listen(args.socket)
     threading.Thread(target=watchdog_thread, args=(fusion,), daemon=True).start()
+    threading.Thread(target=fall_thread, args=(accel, fusion), daemon=True).start()
     try:
         while True:
             threading.Thread(target=serve_thread, args=(server.accept()[0], fusion), daemon=True).start()
