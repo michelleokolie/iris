@@ -27,7 +27,8 @@ Alert decide(const std::vector<Box>& boxes);
 Rules for `decide`:
 - in path = box overlaps center strip (x in 0.33..0.67)
 - close = box height > 0.5 of frame, or y2 > 0.9
-- direction = side with more free space; "clear" when level 0
+- level: 0 if nothing in path; 3 if an in-path box is close and y2 > 0.9; 2 if an in-path box is close; else 1
+- direction = side with more free space (box width overlapping x 0..0.5 vs 0.5..1, all boxes); "ahead" on a tie; "clear" when level 0
 
 ## Socket (vision -> io)
 

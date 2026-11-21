@@ -7,3 +7,15 @@
 - 2026-11-21: Board hostname `iris`; Wi-Fi via phone/laptop hotspot in boot/wpa_supplicant.conf (venue Wi-Fi doesn't work). SSH `qnxuser@iris.local`; Windows needs `-m hmac-sha2-256`.
 - 2026-11-21: Webcam = Logitech C920 in a blue USB 3.0 port; sensor service uses /etc/config/sensor/sensor_rpi5.conf; camera is SENSOR_UNIT 5; live feed verified with `camera_mux -n 1 -u 5`.
 - 2026-11-21: QNX camera access isn't supported from Python, so vision (capture/detect/decide) is one C++ process and io (actuate/speak) is Python; they talk over a UNIX socket at /tmp/iris.sock, one line per Alert ("2 left\n").
+- 2026-11-21: onnxruntime 1.24.4 (onnxruntime-dev), python3-opencv 4.12 and numpy install on the Pi via `sudo apk add` from repo.oss.qnx.com 8.0.5. python3-onnxruntime 1.24.4-r0 is broken: it ships without onnxruntime_pybind11_state.so, so `import onnxruntime` fails.
+- 2026-11-21: cv2.VideoCapture(0) does not open the C920 on QNX (opened False, "GStreamer: pipeline have not been created"); camera capture must use the C++ camera API.
+- 2026-11-21: C++ builds on the board: `sudo apk add qnx-sf-base-dev qnx-screen-dev`, then `clang++ -std=c++17 grab_frame.cpp -o grab_frame -lcamapi`. grab_frame wrote /tmp/frame.ppm from sensor unit 5.
+- 2026-11-21: C920 default stream under sensor_rpi5.conf = YCBYCR (YUYV) 640x480, stride 1280.
+- 2026-11-21: onnxruntime C++ runs on the Pi (build: `clang++ -std=c++17 ort_smoke.cpp -o ort_smoke -lonnxruntime`). Tiny YOLOv2 (416x416, fp32, default session options) = ~256 ms/frame (~4 fps). "Schema error" spam at load is harmless.
+- 2026-11-21: Tiny YOLOv2 threads on the Pi: 1 = ~436 ms, 2 = ~248 ms, 4 = ~245 ms. Use 2 intra-op threads (no gain past 2, leaves cores for capture/io). pidin reports Cortex-A76 at 1500 MHz (Pi 5 rated 2.4 GHz) - ask QNX table if the clock can be raised.
+- 2026-11-21: DEIMv2-Femto (deimv2_femto.onnx + .onnx.data, inputs images[1,3,416,416] float + orig_target_sizes[1,2] int64; outputs labels/boxes/scores x300) = ~120 ms/frame (~8 fps) on the Pi with 2 threads, 2x faster than Tiny YOLOv2.
+- 2026-11-21: Option B chosen: C++ `vision` does capture, DEIMv2 detect and decide, and sends Alert lines over /tmp/iris.sock; Python `io` only actuates and speaks. decide() is ported from PR #3 (level 3 = in path, close and y2 > 0.9; direction tie = "ahead").
+- 2026-11-21: Full vision loop (capture -> DEIMv2 -> decide) runs on the Pi at ~126 ms/frame (~8 fps). Level 3 on every frame in the first run was the orig_target_sizes bug below.
+- 2026-11-21: DEIMv2-Femto labels are COCO 0-79 class indices (0 person, 56 chair, 60 dining table, 62 tv), not 1-90 category ids.
+- 2026-11-21: DEIMv2 orig_target_sizes must be [width, height] (boxes are scaled by w,h,w,h). PR #3 detect.py passes [h, w], which shrinks x by 0.75 and stretches y by 1.33 (made nearly everything "close").
+- 2026-11-21: Score threshold stays 0.4 (VISION_SCORE env overrides). At 0.2 Femto only adds duplicate/junk boxes; it misses large close objects cut off by the frame at any threshold. Plan: ultrasonic sensor (read by io) for "something close ahead"; interfaces change TBD.

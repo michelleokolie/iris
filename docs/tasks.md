@@ -11,10 +11,11 @@ git worktree add ..\iris-submit -b mount-submission
 
 ## A. QNX lead (`bringup-qnx`) - THE BLOCKER
 - [x] Boot QNX on the loaner Pi 5 (hostname `iris`, hotspot Wi-Fi, SSH + VNC work)
-- [ ] Ask the QNX table: does onnxruntime count as the AI module, is it on QNX for Pi 5, and how do we build C++ for the Pi (on-board clang vs SDP cross-compile)
+- [ ] Ask the QNX table: does onnxruntime count as the AI module; broken python3-onnxruntime; can the CPU run above 1500 MHz
+- [x] C++ builds on the board with clang++ (see vision/README.md)
 - [x] USB webcam enumerates and shows a feed (C920, blue USB 3.0 port, sensor unit 5, `camera_mux -n 1 -u 5`)
-- [ ] Run `vision/grab_frame` on the Pi; report width/height/format
-- [ ] onnxruntime runs one image on the Pi; note fps
+- [x] Run `vision/grab_frame` on the Pi (YUYV 640x480)
+- [x] onnxruntime runs on the Pi (C++ only; DEIMv2-Femto ~120 ms/frame)
 - [ ] Tell C when frames + onnxruntime work; tell B which GPIO/I2C access works
 
 ## B. Hardware (`hw-actuators`)
@@ -26,11 +27,13 @@ git worktree add ..\iris-submit -b mount-submission
 - [ ] `io` (Python): listen on /tmp/iris.sock, parse Alert lines per docs/interfaces.md, drive servo + LEDs
 
 ## C. Software (`vision-alert`)
-`vision` is C++ on QNX (camera API is C only); see docs/interfaces.md.
-- [ ] capture: one frame from sensor unit 5 (`vision/grab_frame.cpp` draft), then a frame loop producing `Frame`
-- [ ] `decide` in C++ per docs/interfaces.md, tested on laptop with recorded frames
-- [ ] `detect` in C++ with an ONNX detector via onnxruntime C/C++ API (laptop first, then Pi; blocked on A's onnxruntime answer)
-- [ ] Send Alert lines to /tmp/iris.sock (connect to `io`'s socket, send on change)
+`vision` is C++ on QNX (camera API is C only, Python onnxruntime is broken); see docs/interfaces.md and vision/README.md.
+- [x] capture: frame loop from sensor unit 5 (`vision/capture.cpp`)
+- [x] `decide` in C++ (port of PR #3), `vision/decide_test.cpp` passes PR #3's cases
+- [x] `detect` in C++: DEIMv2-Femto via onnxruntime, ~8 fps full loop on the Pi
+- [ ] Test Alert lines over /tmp/iris.sock against a listener, then against `io`
+- [ ] Decide what "ahead" means (exact-tie rule almost never fires)
+- [ ] Ultrasonic sensor for close obstacles the detector misses (update interfaces.md first)
 - [ ] `speak` (Python, in `io`): phrases for Alert and fall; audio route (phone / dongle / Bluetooth)
 
 ## D. Build + submission (`mount-submission`)
