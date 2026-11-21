@@ -17,6 +17,7 @@ REST_US = 1000
 TAP_US = 1800
 PERIOD_S = 0.020
 DWELL_PULSES = 10           # 0.2 s to let the horn reach each position
+REST_SLICE_S = 0.05         # granularity for noticing a level change between taps
 TAP_CYCLE_S = {1: 1.5, 2: 0.8, 3: 0.4}  # level -> time per tap
 
 
@@ -78,7 +79,12 @@ class Actuator:
                 if self._stopped:
                     return
                 self._pulse(us)
-        self._sleep(max(0.0, TAP_CYCLE_S[level] - 2 * DWELL_PULSES * PERIOD_S))
+        # Wait out the rest of the cycle in slices so a level change starts the next tap early.
+        rest = max(0.0, TAP_CYCLE_S[level] - 2 * DWELL_PULSES * PERIOD_S)
+        for _ in range(round(rest / REST_SLICE_S)):
+            if self._stopped or self._level != level:
+                return
+            self._sleep(REST_SLICE_S)
 
     def _servo_loop(self):
         while not self._stopped:

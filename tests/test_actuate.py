@@ -73,6 +73,15 @@ def test_tap_rate_increases_with_level():
     cycles = []
     for level in (1, 2, 3):
         a, _, sleeps = make()
+        a.alert(level, "left")
         a._tap(level)
         cycles.append(sum(sleeps))
     assert cycles[0] > cycles[1] > cycles[2]
+
+
+def test_tap_cuts_rest_short_when_level_changes():
+    a, _, sleeps = make()
+    a.alert(1, "left")
+    a._sleep = lambda s: (sleeps.append(s), a.alert(3, "left"))
+    a._tap(1)
+    assert sum(sleeps) < 0.4 + 2 * actuate.REST_SLICE_S + 0.01  # pulses plus at most one slice

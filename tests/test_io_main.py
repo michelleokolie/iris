@@ -20,7 +20,7 @@ def run(payload, conn_pair):
     server_end, client_end = conn_pair
     client_end.sendall(payload)
     client_end.close()
-    io_main.serve_client(server_end, actuator)
+    io_main.serve_client(server_end, io_main.Fusion(actuator))
     return gpio
 
 
