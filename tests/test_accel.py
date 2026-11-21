@@ -22,7 +22,7 @@ def test_sign_extension():
 
 
 def test_invalid_bit_rejected():
-    with pytest.raises(AssertionError):
+    with pytest.raises(ValueError, match="invalid sample"):
         to_g(0x40 | 5)
 
 
@@ -30,6 +30,11 @@ def test_parse_line_flat_on_back():
     x, y, z = parse_line("0 1 21\n")
     assert (x, y) == (0, pytest.approx(1 / COUNTS_PER_G))
     assert z == pytest.approx(0.985, abs=0.01)
+
+
+def test_parse_line_requires_three_axes():
+    with pytest.raises(ValueError, match="three-axis"):
+        parse_line("")
 
 
 def test_ir_parse():
