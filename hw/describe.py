@@ -46,19 +46,44 @@ def identify(box, rng):
     return name if plausible(box, rng[0]) else "obstacle"
 
 
+PATH_X = (0.33, 0.67)  # image x-range of the camera's in-path strip (same strip vision decides on)
+FALL = "Fall detected. Are you okay?"
+WORDS = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five", 6: "six", 7: "seven", 8: "eight", 9: "nine", 10: "ten"}
+
+
+def position(box):
+    """Where the object is: "in front of you", "to your left" or "to your right" (no box: in front)."""
+    if box is None:
+        return "in front of you"
+    centre = (box.x1 + box.x2) / 2
+    if centre < PATH_X[0]:
+        return "to your left"
+    if centre > PATH_X[1]:
+        return "to your right"
+    return "in front of you"
+
+
 def distance_text(cm):
+    """Nearest 10 cm under a metre, else nearest half metre: "40 centimeters", "one and a half meters"."""
     if cm < 100:
         return f"{round(cm / 10) * 10} centimeters"
-    return f"{cm / 100:.1f} meters"
+    halves = round(cm / 50)  # distance in half metres
+    whole, half = divmod(halves, 2)
+    if half:
+        return f"{WORDS[whole]} and a half meters"
+    return "one meter" if whole == 1 else f"{WORDS[whole]} meters"
 
 
-def phrase(level, direction, name, rng):
-    """Short sentence for the wearer. rng: (cm, closing) or None."""
+def phrase(level, where, name, rng):
+    """Short sentence for the wearer, e.g. "Stop. A chair to your left, about two meters away".
+
+    where: position() text; rng: (cm, closing) or None."""
     if level == 0:
         return "path clear"
-    text = f"{name} {distance_text(rng[0])}" if rng is not None else f"{name} ahead"
+    article = "an" if name[0] in "aeiou" else "a"
+    text = f"{article} {name} {where}".capitalize()
+    if rng is not None:
+        text += f", about {distance_text(rng[0])} away"
     if level == 3:
         text = "Stop. " + text
-    if direction in ("left", "right"):
-        text += f", go {direction}"
     return text

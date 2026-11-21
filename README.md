@@ -12,6 +12,10 @@ gcc -o accel accel.c && sudo ./accel /dev/i2c1 10        # prints "x y z" raw co
 sudo python3 bench.py led                                # then: servo | alerts
 ```
 
-To hear the warnings on a phone: put the phone on the same Wi-Fi as the Pi, open `http://<pi address>:8080/` in its browser (the address is the `inet` line of `ifconfig bcm0` on the Pi), tap Start once, and keep the page open and the screen on. `io` serves the page.
+To hear the warnings on a phone (and through AirPods paired to it): the Pi has no Bluetooth on QNX, so `io` serves a page and the phone speaks.
+1. Turn the phone's hotspot on (or use any Wi-Fi both can join) and make sure the Pi and the phone are on the same network. The Pi joins it from `boot/wpa_supplicant.conf`; if the Pi is not on the phone's network, that file needs the hotspot's name and password (ask the team; do not edit it on a running board).
+2. Find the Pi's address: the `inet` line of `ifconfig bcm0` on the Pi (a phone hotspot often shows the connected devices' addresses too).
+3. Start `io` on the Pi. On the phone open `http://<pi address>:8080/` in the browser and tap **Start speaking**; **Test voice** speaks a sample. The page shows Connected / Reconnecting and the last sentence in large text.
+4. Keep the page open and the screen on. The page asks the phone to stay awake, but that request only works in secure contexts (this page is plain http), so the screen may still sleep; phones may also stop speech when the screen locks. Not tested on any phone yet.
 
 `io` needs the built `hw/accel` next to `io_main.py`: `sudo python3 hw/io_main.py` reads the accelerometer in a thread and prints "Fall detected" when `fall.py` sees a jolt, a tilt and then stillness. Flat on its back the accelerometer should read about 1 g on one axis. The IR reader (`ir_read.py`) is unverified: `python3 -c "from ir_read import IrReader; print(IrReader().read())"`; if the wave reads inverted, construct `IrReader(active_high=False)`.

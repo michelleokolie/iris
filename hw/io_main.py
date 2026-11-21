@@ -20,7 +20,7 @@ import traceback
 
 from accel import Accel
 from actuate import Actuator
-from describe import Box, identify, phrase
+from describe import FALL, Box, identify, phrase, position
 from fall import FallDetector
 from fuse import fuse, range_level
 from speak import PhoneSpeaker
@@ -110,7 +110,7 @@ class Fusion:
         with self._lock:
             if self._trace:
                 print(f"{self._now():.4f} fall", flush=True)
-            self._say("Fall detected")
+            self._say(FALL)
 
     def _update(self, t):
         rng = self._range
@@ -128,15 +128,16 @@ class Fusion:
             self._last = fused
             self._actuator.alert(*fused)
         name = identify(box, rng)
-        key = (fused, name, rng is not None)
-        if key == self._last_key:  # speak on a change of level, direction, name or having a distance, not of its value
+        where = position(box)
+        key = (0,) if fused[0] == 0 else (fused[0], where, name, rng is not None)  # level 0 always says "path clear"
+        if key == self._last_key:  # speak on a change of level, position, name or having a distance, not of its value
             return
         escalates = fused[0] > self._said_level
         if escalates or self._said_t is None or t - self._said_t >= SAY_MIN_GAP_S:
             self._last_key = key
             self._said_level = fused[0]
             self._said_t = t
-            self._say(phrase(*fused, name, rng))  # otherwise a later refresh() says it once the gap has passed
+            self._say(phrase(fused[0], where, name, rng))  # otherwise a later refresh() says it once the gap has passed
 
 
 def block_sigint():

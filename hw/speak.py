@@ -3,6 +3,7 @@
 io serves a tiny web page on PORT. The phone, on the same Wi-Fi as the Pi, opens http://<pi address>:PORT/,
 taps Start once (phones only speak after a tap), and the page speaks every sentence io sends over a
 server-sent-events stream. A new sentence cancels the one still being spoken: the latest warning wins.
+The page asks the phone to keep its screen on (wake lock) and shows the connection state and last sentence.
 """
 import queue
 import threading
@@ -14,19 +15,44 @@ KEEPALIVE_S = 15  # an idle stream gets a comment this often so the phone's conn
 PAGE = b"""<!doctype html>
 <meta name=viewport content="width=device-width,initial-scale=1">
 <title>iris</title>
-<style>body{font:22px sans-serif;margin:24px}button{font-size:28px;padding:16px 28px}#log{margin-top:24px;color:#444}</style>
+<style>
+body{font:22px sans-serif;margin:16px;text-align:center}
+button{font-size:28px;padding:16px 28px;margin:8px}
+#status{font-size:40px;font-weight:bold;padding:16px;margin:12px 0;border-radius:12px;background:#ddd}
+#status.ok{background:#8d8}#status.bad{background:#f99}
+#last{font-size:44px;margin-top:24px;min-height:3em}
+</style>
+<div id=status>Not started</div>
 <button id=go>Start speaking</button>
-<div id=log></div>
+<button id=test>Test voice</button>
+<div id=note></div>
+<div id=last></div>
 <script>
-document.getElementById("go").onclick = () => {
-  speechSynthesis.speak(new SpeechSynthesisUtterance("Ready"));
+const $ = id => document.getElementById(id);
+const speak = text => {  // the latest warning wins
+  speechSynthesis.cancel();
+  speechSynthesis.speak(new SpeechSynthesisUtterance(text));
+};
+const status = (text, cls) => { $("status").textContent = text; $("status").className = cls; };
+let started = false;
+// navigator.wakeLock exists only in secure contexts; this page is plain http, so a browser may not offer it
+const keepAwake = async () => {
+  if (!navigator.wakeLock) { $("note").textContent = "No wake lock here: keep the screen on yourself."; return; }
+  await navigator.wakeLock.request("screen");
+};
+document.addEventListener("visibilitychange", () => {
+  if (started && document.visibilityState === "visible") keepAwake();
+});
+$("test").onclick = () => speak("A person in front of you, about two meters away");
+$("go").onclick = async () => {
+  started = true;
+  speak("Ready");
+  keepAwake();
   const es = new EventSource("/events");
-  es.onmessage = e => {
-    speechSynthesis.cancel();
-    speechSynthesis.speak(new SpeechSynthesisUtterance(e.data));
-    document.getElementById("log").textContent = e.data;
-  };
-  document.getElementById("go").remove();
+  es.onopen = () => status("Connected", "ok");
+  es.onerror = () => status("Reconnecting...", "bad");
+  es.onmessage = e => { speak(e.data); $("last").textContent = e.data; };
+  $("go").remove();
 };
 </script>
 """
