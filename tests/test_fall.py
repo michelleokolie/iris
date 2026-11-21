@@ -7,7 +7,7 @@ from fall import FallDetector
 
 STILL = (0, 0, 1)
 FREE = (0, 0, 0.1)
-HIT = (0, 0, 3.5)
+HIT = (0, 0, 1.5)
 
 
 def run(samples):

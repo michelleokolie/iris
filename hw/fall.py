@@ -1,11 +1,11 @@
 """fall: FallEvent detection from accelerometer samples (x, y, z in g).
 
-Free fall (|a| < FREEFALL_G) followed within WINDOW_S by an impact (|a| > IMPACT_G).
+Free fall (|a| < FREEFALL_G) followed within WINDOW_S by an impact (|a| > IMPACT_G, sensor range is +-1.5 g).
 """
 import math
 
 FREEFALL_G = 0.4
-IMPACT_G = 2.5
+IMPACT_G = 1.3   # MMA7660FC clips at 1.5 g
 WINDOW_S = 1.0
 
 
