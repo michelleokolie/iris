@@ -6,6 +6,7 @@ direction left|right|ahead|clear; "0 clear" is the only level-0 message.
 """
 import argparse
 import os
+import signal
 import socket
 
 from actuate import Actuator
@@ -46,7 +47,15 @@ if __name__ == "__main__":
     ap.add_argument("--fake", action="store_true", help="use the recording fake GPIO backend")
     ap.add_argument("--socket", default=SOCKET_PATH)
     args = ap.parse_args()
+    # QNX delivers SIGINT to any thread that doesn't block it; Python only handles it in the
+    # main thread, which sits in accept(). Block it while the servo thread starts (threads
+    # inherit the mask) so Ctrl-C always reaches the main thread.
+    signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGINT})
     actuator = Actuator(FakeGpio() if args.fake else None)
+    signal.pthread_sigmask(signal.SIG_UNBLOCK, {signal.SIGINT})
     server = listen(args.socket)
-    while True:  # one client at a time; vision may reconnect after a restart
-        serve_client(server.accept()[0], actuator)
+    try:
+        while True:  # one client at a time; vision may reconnect after a restart
+            serve_client(server.accept()[0], actuator)
+    finally:
+        actuator.off()

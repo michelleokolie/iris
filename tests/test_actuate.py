@@ -1,5 +1,6 @@
 import os
 import sys
+import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "hw"))
 
@@ -48,6 +49,24 @@ def test_servo_pulse_widths():
     assert {round(h * 1e6) for h in highs} == {actuate.TAP_US, actuate.REST_US}
     assert all(1000 <= h * 1e6 <= 1800 for h in highs)
     assert g.state[actuate.SERVO] is False
+
+
+def test_off_switches_every_output_off():
+    a, g, _ = make()
+    a.alert(3, "ahead")
+    a.describing(True)
+    a.off()
+    assert all(g.state[pin] is False for pin in actuate.OUTPUTS)
+
+
+def test_off_stops_servo_thread():
+    g = FakeGpio()
+    a = Actuator(gpio=g, sleep=lambda s: time.sleep(s / 20), threaded=True)
+    a.alert(3, "ahead")
+    time.sleep(0.05)
+    a.off()
+    assert not a._thread.is_alive()
+    assert all(g.state[pin] is False for pin in actuate.OUTPUTS)
 
 
 def test_tap_rate_increases_with_level():
