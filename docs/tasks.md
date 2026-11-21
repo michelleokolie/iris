@@ -32,7 +32,7 @@ git worktree add ..\iris-submit -b mount-submission
 - [x] `decide` in C++ (port of PR #3), `vision/decide_test.cpp` passes PR #3's cases
 - [x] `detect` in C++: DEIMv2-Femto via onnxruntime, ~8 fps full loop on the Pi
 - [ ] Test Alert lines over /tmp/iris.sock against a listener, then against `io`
-- [ ] Decide what "ahead" means (exact-tie rule almost never fires)
+- [x] "ahead" = sides within 0.05 (decide.cpp, interfaces.md)
 - [ ] Ultrasonic sensor for close obstacles the detector misses (update interfaces.md first)
 - [ ] `speak` (Python, in `io`): phrases for Alert and fall; audio route (phone / dongle / Bluetooth)
 

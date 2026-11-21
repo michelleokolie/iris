@@ -2,9 +2,11 @@
 #include "decide.h"
 
 #include <algorithm>
+#include <cmath>
 
 static constexpr float STRIP_LEFT = 0.33f;
 static constexpr float STRIP_RIGHT = 0.67f;
+static constexpr float AHEAD_TOLERANCE = 0.05f;  // fraction of frame width
 
 static bool in_path(const Box& b) { return b.x2 > STRIP_LEFT && b.x1 < STRIP_RIGHT; }
 
@@ -26,9 +28,10 @@ Alert decide(const std::vector<Box>& boxes) {
     }
     if (level == 0) return {0, "clear"};
 
+    // "ahead" = neither side is clearly freer, i.e. the obstacle is roughly centred.
+    // Without a tolerance this needed an exact float tie and practically never fired.
     float left = occupancy(boxes, 0.0f, 0.5f);
     float right = occupancy(boxes, 0.5f, 1.0f);
-    if (left < right) return {level, "left"};
-    if (right < left) return {level, "right"};
-    return {level, "ahead"};
+    if (std::abs(left - right) <= AHEAD_TOLERANCE) return {level, "ahead"};
+    return {level, left < right ? "left" : "right"};
 }

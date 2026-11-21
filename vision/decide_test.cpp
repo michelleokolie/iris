@@ -15,5 +15,9 @@ int main() {
     assert(decide({box(0.4f, 0.5f, 0.6f, 0.95f)}).level == 3);
     assert(decide({box(0.0f, 0.3f, 0.45f, 0.5f), box(0.4f, 0.3f, 0.6f, 0.5f)}).direction == "right");
     assert(decide({box(0.55f, 0.3f, 1.0f, 0.5f), box(0.4f, 0.3f, 0.6f, 0.5f)}).direction == "left");
+    // "ahead" tolerance (team decision, docs/decisions.md): sides within 0.05 of each other.
+    assert(decide({box(0.4f, 0.3f, 0.6f, 0.5f)}).direction == "ahead");    // centred
+    assert(decide({box(0.42f, 0.3f, 0.6f, 0.5f)}).direction == "ahead");   // 0.08 vs 0.10
+    assert(decide({box(0.34f, 0.3f, 0.6f, 0.5f)}).direction == "right");   // 0.16 vs 0.10
     std::puts("decide_test: all passed");
 }

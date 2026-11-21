@@ -19,3 +19,4 @@
 - 2026-11-21: DEIMv2-Femto labels are COCO 0-79 class indices (0 person, 56 chair, 60 dining table, 62 tv), not 1-90 category ids.
 - 2026-11-21: DEIMv2 orig_target_sizes must be [width, height] (boxes are scaled by w,h,w,h). PR #3 detect.py passes [h, w], which shrinks x by 0.75 and stretches y by 1.33 (made nearly everything "close").
 - 2026-11-21: Score threshold stays 0.4 (VISION_SCORE env overrides). At 0.2 Femto only adds duplicate/junk boxes; it misses large close objects cut off by the frame at any threshold. Plan: ultrasonic sensor (read by io) for "something close ahead"; interfaces change TBD.
+- 2026-11-21: decide() "ahead" = left/right occupancy within 0.05 of each other (team decision; exact-tie rule from PR #3 practically never fired).
