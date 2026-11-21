@@ -19,5 +19,12 @@ int main() {
     assert(decide({box(0.4f, 0.3f, 0.6f, 0.5f)}).direction == "ahead");    // centred
     assert(decide({box(0.42f, 0.3f, 0.6f, 0.5f)}).direction == "ahead");   // 0.08 vs 0.10
     assert(decide({box(0.34f, 0.3f, 0.6f, 0.5f)}).direction == "right");   // 0.16 vs 0.10
+    // primary_box: nothing in path -> none; otherwise the most urgent, then the tallest.
+    assert(!primary_box({}));
+    assert(!primary_box({box(0.0f, 0.2f, 0.2f, 0.4f)}));
+    std::vector<Box> mixed = {box(0.4f, 0.3f, 0.6f, 0.5f), box(0.4f, 0.5f, 0.6f, 0.95f), box(0.0f, 0.0f, 0.2f, 1.0f)};
+    assert(primary_box(mixed)->y2 == 0.95f);                                            // level 3 beats level 1
+    std::vector<Box> tie = {box(0.4f, 0.3f, 0.6f, 0.5f), box(0.4f, 0.2f, 0.6f, 0.6f)};
+    assert(primary_box(tie)->y2 == 0.6f);                                               // both level 1, taller wins
     std::puts("decide_test: all passed");
 }

@@ -35,6 +35,7 @@ Rules for `decide`:
 - UNIX domain stream socket at `/tmp/iris.sock`. `io` creates and listens, one thread per client; `vision` and the C++ `ultrasonic` reader (`hw/ultrasonic.cpp`) both connect.
 - One ASCII line per message, `\n`-terminated, single spaces, nothing else:
   - Alert (vision): `<level> <direction>\n`, level `0`-`3`, direction `left|right|ahead|clear`. Example: `2 left\n`.
+  - Box (vision): `box <label> <x1> <y1> <x2> <y2>\n`, label = COCO class index, coordinates normalized 0..1 (`box 0 0.40 0.05 0.60 0.77\n`), or `box none\n` when nothing is in path. It is the in-path box that drives the Alert (highest level, then tallest, `primary_box` in `vision/decide.cpp`). Sent every frame, independent of the Alert debounce, so `io` has fresh geometry.
   - Range (ultrasonic): `range <cm> <closing_cm_per_s>\n` (closing > 0 = getting closer), or `range none\n` when no echo came back. Example: `range 84.5 31.0\n`.
   - Fall (later): `fall\n`.
 - `vision` sends an Alert only when the debounced Alert changes: level up immediately, level down or back to clear after 3 frames in a row (~0.4 s), same level with a new direction after 2 (~0.25 s). Tunable with VISION_DEBOUNCE=up,down,turn. `ultrasonic` sends one Range per measurement (~every 60 ms).
@@ -43,6 +44,7 @@ Rules for `decide`:
 ## io (Python)
 
 - fuse (`hw/fuse.py`): camera Alert + Range -> the Alert to actuate. The ultrasonic sets near/imminent (distance and time-to-contact); the camera can only add "far" (level 1) and gives the direction; an obstacle only the ultrasonic sees is direction `ahead`. A missing or stale (>0.5 s) range falls back to the camera Alert alone. Thresholds are starting guesses, tuned on the board.
+- describe (`hw/describe.py`): box + range -> a name and a phrase. Real height ~ box height * distance / F_NORM; if that disagrees with the label's expected height (small table: person, bicycle, car, bench, dog, chair, couch, table) the name becomes "obstacle". A box cut off by the frame edge is only rejected when too tall. A box and range are only compared when the box overlaps the beam's image strip. Box and range older than 0.5 s are ignored. Phrases ("Stop. person 1.2 meters, go left") are said when level, direction, name or having-a-distance changes, not when the distance value changes. No audio route yet, so `io_main.py` prints them.
 - actuate: fused Alert -> servo tap rate + LEDs (green clear, red level>=2; blue while describing)
 - speak: Alert | fall -> short phrase string -> audio route
 

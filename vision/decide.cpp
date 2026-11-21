@@ -18,14 +18,26 @@ static float occupancy(const std::vector<Box>& boxes, float lo, float hi) {
     return total;
 }
 
+// Level of one box: 0 if not in path, else 1 far / 2 near / 3 imminent.
+static int box_level(const Box& b) {
+    if (!in_path(b)) return 0;
+    if (!is_close(b)) return 1;
+    return b.y2 > 0.9f ? 3 : 2;
+}
+
+std::optional<Box> primary_box(const std::vector<Box>& boxes) {
+    std::optional<Box> best;
+    for (const auto& b : boxes) {
+        int l = box_level(b);
+        if (l == 0) continue;
+        if (!best || l > box_level(*best) || (l == box_level(*best) && b.y2 - b.y1 > best->y2 - best->y1)) best = b;
+    }
+    return best;
+}
+
 Alert decide(const std::vector<Box>& boxes) {
     int level = 0;
-    for (const auto& b : boxes) {
-        if (!in_path(b)) continue;
-        int l = 1;
-        if (is_close(b)) l = b.y2 > 0.9f ? 3 : 2;
-        level = std::max(level, l);
-    }
+    for (const auto& b : boxes) level = std::max(level, box_level(b));
     if (level == 0) return {0, "clear"};
 
     // "ahead" = neither side is clearly freer, i.e. the obstacle is roughly centred.
