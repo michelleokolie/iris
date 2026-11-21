@@ -13,8 +13,8 @@ sudo python3 bench.py led                                # then: servo | alerts
 ```
 
 To hear the warnings on a phone (and through AirPods paired to it): the Pi has no Bluetooth on QNX, so `io` serves a page and the phone speaks.
-1. Turn the phone's hotspot on (or use any Wi-Fi both can join) and make sure the Pi and the phone are on the same network. The Pi joins it from `boot/wpa_supplicant.conf`; if the Pi is not on the phone's network, that file needs the hotspot's name and password (ask the team; do not edit it on a running board).
-2. Find the Pi's address: the `inet` line of `ifconfig bcm0` on the Pi (a phone hotspot often shows the connected devices' addresses too).
+1. Put the phone on the same Wi-Fi as the Pi (the venue Wi-Fi works; no hotspot needed). If the page will not load while the Pi answers ssh, the network may block devices from talking to each other: then use a phone hotspot and put its name and password in `boot/wpa_supplicant.conf`.
+2. Find the Pi's address: the `inet` line of `ifconfig bcm0` on the Pi.
 3. Start `io` on the Pi. On the phone open `http://<pi address>:8080/` in the browser and tap **Start speaking**; **Test voice** speaks a sample. The page shows Connected / Reconnecting and the last sentence in large text.
 4. Keep the page open and the screen on. The page asks the phone to stay awake, but that request only works in secure contexts (this page is plain http), so the screen may still sleep; phones may also stop speech when the screen locks. Not tested on any phone yet.
 
