@@ -10,7 +10,8 @@ COUNTS_PER_G = 21.33   # MMA7660FC: 6-bit signed, +-1.5 g -> 32 counts per 1.5 g
 
 def to_g(raw):
     """Raw register byte (bit6 = invalid, bits5..0 = signed 6-bit) -> g."""
-    assert not raw & 0x40, "invalid sample"
+    if raw & 0x40:
+        raise ValueError("invalid sample")
     v = raw & 0x3F
     if v & 0x20:
         v -= 64
@@ -18,7 +19,10 @@ def to_g(raw):
 
 
 def parse_line(line):
-    return tuple(to_g(int(f)) for f in line.split())
+    fields = line.split()
+    if len(fields) != 3:
+        raise ValueError("expected three-axis sample")
+    return tuple(to_g(int(f)) for f in fields)
 
 
 class Accel:
@@ -27,4 +31,7 @@ class Accel:
 
     def read(self):
         """Blocks for the next sample; returns (x, y, z) in g, ready for FallDetector.update."""
-        return parse_line(self._p.stdout.readline())
+        line = self._p.stdout.readline()
+        if line == "":
+            raise RuntimeError("accel helper exited")
+        return parse_line(line)
