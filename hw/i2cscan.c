@@ -6,7 +6,10 @@
 #include <hw/i2c.h>
 
 int main(int argc, char **argv)
-{
+    if (argc != 2) {
+        fprintf(stderr, "usage: i2cscan /dev/i2c1\n");
+        return 2;
+    }
     int fd = open(argv[1], O_RDWR);
     if (fd < 0) { perror("open"); return 1; }
     for (unsigned a = 0x08; a <= 0x77; a++) {
