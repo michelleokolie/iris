@@ -67,12 +67,15 @@ public:
     // One raw reading; an Output when there is a value to send, nothing while a jump awaits confirmation
     // or the median has fewer than FILTER_SIZE readings.
     std::optional<Output> update(double t, double cm) {
-        if (accepted_ && std::abs(cm - *accepted_) > JUMP_CM) {
-            bool confirmed = pending_ && std::abs(cm - *pending_) <= CONFIRM_CM;
-            if (!confirmed) {
+if (pending_) {
+            if (std::abs(cm - *pending_) > CONFIRM_CM) {
                 pending_ = cm;
                 return std::nullopt;
             }
+        } else if (accepted_ && std::abs(cm - *accepted_) > JUMP_CM) {
+            pending_ = cm;
+            return std::nullopt;
+        }
             raw_.clear();  // the new surface starts a new window
             history_.clear();
             raw_.push_back(*pending_);
