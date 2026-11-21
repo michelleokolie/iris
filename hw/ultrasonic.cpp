@@ -191,6 +191,11 @@ int main(int argc, char** argv) {
     check(rpi_gpio_setup_pull(echo, GPIO_IN, GPIO_PUD_OFF), "setup echo");
     check(rpi_gpio_add_event_detect(echo, coid, GPIO_RISING | GPIO_FALLING, EVENT_ECHO), "event detect");
     check(rpi_gpio_output(trig, GPIO_LOW), "trigger low");
+    // Every exit path must release the event registration: a reader that dies without rpi_gpio_cleanup() leaves
+    // GPIO 16 busy ("event detect: Resource busy") until the Pi reboots. exit() runs this; a dead io is then
+    // an exit(1) from send_line (EPIPE, SIGPIPE ignored) instead of a kill.
+    std::atexit([] { rpi_gpio_cleanup(); });
+    signal(SIGPIPE, SIG_IGN);
     sleep(1);  // let the sensor settle
 
     int fd = connect_io(path);
@@ -210,6 +215,5 @@ int main(int argc, char** argv) {
         double rest = PERIOD_S - (now_s() - t0);
         if (rest > 0) usleep(static_cast<useconds_t>(rest * 1e6));
     }
-    check(rpi_gpio_cleanup(), "cleanup");
-    return 0;
+    return 0;  // the atexit handler runs rpi_gpio_cleanup()
 }

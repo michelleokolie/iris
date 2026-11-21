@@ -31,6 +31,7 @@ ACCEL_HZ = 25
 DIRECTIONS = ("left", "right", "ahead", "clear")
 BOX_STALE_S = 0.5    # a box older than this is ignored (vision sends one every frame, ~0.12 s)
 RANGE_HOLD_S = 1.0   # the last good range is kept this long, through "range none" gaps (41% no-echo on the board)
+VISION_STALE_S = 1.5  # no vision line (box or Alert) for this long = camera lost (vision sends a box every ~0.12 s)
 SAY_MIN_GAP_S = 1.0  # at most one sentence per this, unless the level goes up
 
 
@@ -82,6 +83,8 @@ class Fusion:
         self._last = None
         self._last_key = None
         self._range_level = 0  # last range level, for hysteresis
+        self._vision_t = None  # when the last vision line (box or Alert) arrived; None until the first
+        self._camera_lost = False
         self._said_level = 0
         self._said_t = None
 
@@ -97,8 +100,10 @@ class Fusion:
             elif line.startswith("box "):
                 b = parse_box(line)
                 self._box = None if b is None else (b, t)
+                self._vision_t = t
             else:
                 self._camera = parse_alert(line)
+                self._vision_t = t
             self._update(t)
 
     def refresh(self):
@@ -113,6 +118,13 @@ class Fusion:
             self._say(FALL)
 
     def _update(self, t):
+        lost = self._vision_t is not None and t - self._vision_t > VISION_STALE_S
+        if lost:  # forget the camera so a stale Alert can't come back when vision reconnects
+            self._camera = (0, "clear")
+            self._box = None
+        if lost != self._camera_lost:  # said directly: not rate limited, not urgent
+            self._camera_lost = lost
+            self._say("Camera lost" if lost else "Camera back")
         rng = self._range
         if rng is not None and t - rng[2] > RANGE_HOLD_S:
             rng = None
@@ -194,6 +206,7 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--socket", default=SOCKET_PATH)
     args = ap.parse_args()
+    signal.signal(signal.SIGINT, signal.default_int_handler)  # run.sh starts io from a shell that leaves SIGINT ignored
     block_sigint()  # the servo thread inherits the mask; main unblocks it below
     actuator = Actuator()
     signal.pthread_sigmask(signal.SIG_UNBLOCK, {signal.SIGINT})
