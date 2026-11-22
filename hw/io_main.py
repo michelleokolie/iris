@@ -12,6 +12,7 @@ IRIS_TRACE=1 prints a monotonic timestamp per received line, for latency measure
 """
 import argparse
 import os
+import queue
 import signal
 import socket
 import threading
@@ -22,7 +23,8 @@ from accel import Accel
 from actuate import Actuator
 from describe import FALL, Box, identify, phrase, position
 from fall import FallDetector
-from fuse import fuse, range_level
+import fuse as fuse_settings
+from fuse import RangeLevel, fuse
 from speak import PhoneSpeaker
 
 SOCKET_PATH = "/tmp/iris.sock"
@@ -82,7 +84,7 @@ class Fusion:
         self._range = None  # (cm, closing, received_at) or None
         self._last = None
         self._last_key = None
-        self._range_level = 0  # last range level, for hysteresis
+        self._range_levels = RangeLevel()  # ultrasonic level: hysteresis down, CONFIRM readings to go up
         self._vision_t = None  # when the last vision line (box or Alert) arrived; None until the first
         self._camera_lost = False
         self._said_level = 0
@@ -97,6 +99,7 @@ class Fusion:
                 r = parse_range(line)
                 if r is not None:  # "range none" keeps the last good range until RANGE_HOLD_S passes
                     self._range = (*r, t)
+                    self._range_levels.update(*r)  # once per reading, so CONFIRM counts readings
             elif line.startswith("box "):
                 b = parse_box(line)
                 self._box = None if b is None else (b, t)
@@ -134,8 +137,9 @@ class Fusion:
             box = None
         box = None if box is None else box[0]
 
-        fused = fuse(self._camera, rng, self._range_level)
-        self._range_level = 0 if rng is None else range_level(*rng, self._range_level)
+        if rng is None:  # no current range: start over, so a stale level can't come back with the next reading
+            self._range_levels = RangeLevel()
+        fused = fuse(self._camera, None if rng is None else self._range_levels.level)
         if fused != self._last:
             self._last = fused
             self._actuator.alert(*fused)
@@ -167,12 +171,71 @@ def listen(path):
     return server
 
 
-def serve_client(conn, fusion):
+class RangeForward:
+    """SAMPLE (display only): copy each ultrasonic range line to the vision connection(s), for vision's
+    preview bar. A connection counts as vision once it has sent an Alert or box line.
+
+    Must never hold anything up. Each vision connection has its own small queue and writer thread: send() only
+    does put_nowait (a full queue drops the copy) and returns, so the ultrasonic thread and vision's reader
+    thread never wait on vision reading. Only that connection's writer can block (vision busy, e.g. loading the
+    model), and it holds no lock. (The first version sent under a shared lock and deadlocked on the board.)"""
+
+    QUEUE_LINES = 8
+
+    def __init__(self):
+        self._queues = {}  # conn -> queue of encoded lines
+        self._lock = threading.Lock()
+
+    def add(self, conn):
+        with self._lock:
+            if conn in self._queues:
+                return
+            q = queue.Queue(maxsize=self.QUEUE_LINES)
+            self._queues[conn] = q
+        threading.Thread(target=self._writer, args=(conn, q), daemon=True).start()
+
+    def remove(self, conn):
+        with self._lock:
+            q = self._queues.pop(conn, None)
+        if q is not None:
+            try:
+                q.put_nowait(None)  # wake the writer so it exits; if the queue is full, closing conn ends it
+            except queue.Full:
+                pass
+
+    def send(self, line):
+        data = (line + "\n").encode()
+        with self._lock:
+            queues = list(self._queues.values())
+        for q in queues:
+            try:
+                q.put_nowait(data)
+            except queue.Full:
+                pass  # vision isn't keeping up: drop this copy (display only)
+
+    @staticmethod
+    def _writer(conn, q):
+        while (data := q.get()) is not None:
+            try:
+                conn.sendall(data)
+            except OSError:
+                return  # vision disconnected (its reader thread removes it): normal at a socket boundary
+
+
+def serve_client(conn, fusion, forward):
     """Feed the lines from one connected client to fusion until it disconnects."""
     with conn, conn.makefile("r", newline="\n") as lines:
-        for line in lines:
-            assert line.endswith("\n"), repr(line)
-            fusion.on_line(line[:-1])
+        try:
+            for line in lines:
+                assert line.endswith("\n"), repr(line)
+                line = line[:-1]
+                if line.startswith("range "):
+                    forward.send(line)
+                else:
+                    forward.add(conn)  # Alert/box lines: this is vision, it gets the range copies
+                fusion.on_line(line)
+        finally:
+            forward.remove(conn)
 
 
 def run_thread(body, *args):
@@ -218,12 +281,16 @@ if __name__ == "__main__":
         speaker.say(text)
 
     fusion = Fusion(actuator, trace=bool(os.environ.get("IRIS_TRACE")), say=say)
+    print(f"range levels: 3 under {fuse_settings.NEAR_CM:g} cm or closing > {fuse_settings.TTC_MIN_CLOSING:g} cm/s "
+          f"with < {fuse_settings.TTC_S:g} s to contact; 2 under {fuse_settings.MID_CM:g}; 1 under {fuse_settings.FAR_CM:g}; "
+          f"rise after {fuse_settings.CONFIRM} readings", flush=True)
     server = listen(args.socket)
+    forward = RangeForward()  # SAMPLE: range lines copied to vision for its preview bar
     threading.Thread(target=run_thread, args=(speaker.serve,), daemon=True).start()
     threading.Thread(target=run_thread, args=(watchdog_loop, fusion), daemon=True).start()
     threading.Thread(target=run_thread, args=(fall_loop, accel, fusion), daemon=True).start()
     try:
         while True:
-            threading.Thread(target=run_thread, args=(serve_client, server.accept()[0], fusion), daemon=True).start()
+            threading.Thread(target=run_thread, args=(serve_client, server.accept()[0], fusion, forward), daemon=True).start()
     finally:
         actuator.off()

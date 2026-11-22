@@ -8,13 +8,15 @@
 #include <screen/screen.h>
 
 #include <optional>
+#include <string>
 #include <vector>
 
 class Preview {
 public:
     Preview(int width, int height);
+    // note: extra text for the bar, e.g. the ultrasonic reading ("US 398CM"); empty for none.
     void show(const Frame& frame, const std::vector<Box>& boxes, const std::optional<Box>& primary,
-              const Alert& alert);
+              const Alert& alert, const std::string& note);
 
 private:
     screen_context_t ctx_ = nullptr;

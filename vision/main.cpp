@@ -3,6 +3,8 @@
 // Without socket_path it only prints (for testing without io running).
 // VISION_DEBUG=1 also prints every box and writes /tmp/vision.ppm with boxes drawn.
 // VISION_DEBOUNCE=up,down,turn overrides the debounce frame counts (default 1,3,2) for tuning.
+// VISION_LEVELS=far,close,very_close,close_w,very_close_w overrides the in-path box sizes for the levels
+// (default 0.25,0.5,0.8,0.2,0.4: heights for 1/2/3, widths for 2/3).
 // VISION_PREVIEW=1 opens a live window on the Pi's screen (VNC): frame, boxes, in-path strip, level bar.
 
 #include "capture.h"
@@ -11,6 +13,7 @@
 #include "detect.h"
 #include "preview.h"
 
+#include <poll.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
@@ -63,6 +66,35 @@ static std::string box_line(const std::optional<Box>& b) {
     return buf;
 }
 
+// SAMPLE (display only): io copies each ultrasonic "range <cm> <closing>" / "range none" line back to vision
+// over the same socket. Read whatever has arrived without blocking and keep the newest, for the preview bar.
+struct RangeNote {
+    std::string buf;
+    std::string text = "US -";  // shown when nothing has arrived yet or the newest is stale
+    std::chrono::steady_clock::time_point at{};
+
+    void poll_from(int fd) {
+        pollfd p{fd, POLLIN, 0};
+        while (::poll(&p, 1, 0) > 0 && (p.revents & POLLIN)) {
+            char chunk[512];
+            ssize_t n = read(fd, chunk, sizeof(chunk));
+            if (n <= 0) break;
+            buf.append(chunk, static_cast<size_t>(n));
+        }
+        for (size_t nl; (nl = buf.find('\n')) != std::string::npos; buf.erase(0, nl + 1)) {
+            std::string line = buf.substr(0, nl);
+            float cm = 0, closing = 0;
+            if (line == "range none") text = "US NONE";
+            else if (std::sscanf(line.c_str(), "range %f %f", &cm, &closing) == 2) text = "US " + std::to_string(static_cast<int>(cm)) + "CM";
+            else continue;  // a copy cut short by io's non-blocking send: skip it (display only)
+            at = std::chrono::steady_clock::now();
+        }
+    }
+    std::string current() const {
+        return std::chrono::steady_clock::now() - at > std::chrono::milliseconds(500) ? "US -" : text;
+    }
+};
+
 // Debug only: draw box outlines (red, 2 px) and write the frame as a PPM.
 static void write_debug_ppm(Frame frame, const std::vector<Box>& boxes) {
     for (const auto& b : boxes) {
@@ -94,9 +126,13 @@ int main(int argc, char** argv) {
     int up = 1, down = 3, turn = 2;
     if (const char* d = std::getenv("VISION_DEBOUNCE")) std::sscanf(d, "%d,%d,%d", &up, &down, &turn);
     std::printf("debounce frames: up %d, down %d, turn %d\n", up, down, turn);
+    LevelThresholds lv = level_thresholds();
+    std::printf("levels: 1 if h > %.2f; 2 if h > %.2f and w > %.2f; 3 if h > %.2f and w > %.2f\n", lv.far, lv.close,
+                lv.close_w, lv.very_close, lv.very_close_w);
     Debounce debounce(up, down, turn);
     const bool preview_on = std::getenv("VISION_PREVIEW") != nullptr;
     std::optional<Preview> preview;  // created on the first frame, which gives its size
+    RangeNote range_note;  // SAMPLE: ultrasonic reading for the preview bar, copied over by io
 
     for (;;) {
         Frame frame = capture.next();
@@ -115,7 +151,8 @@ int main(int argc, char** argv) {
         std::optional<Box> primary = primary_box(boxes);
         if (preview_on) {
             if (!preview) preview.emplace(frame.width, frame.height);
-            preview->show(frame, boxes, primary, alert);
+            if (fd >= 0) range_note.poll_from(fd);
+            preview->show(frame, boxes, primary, alert, range_note.current());
         }
         if (fd >= 0) send_line(fd, box_line(primary));
 
