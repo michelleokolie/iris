@@ -15,6 +15,7 @@ import signal
 import socket
 import threading
 import time
+import traceback
 
 from accel import Accel
 from actuate import Actuator
@@ -159,20 +160,27 @@ def serve_client(conn, fusion):
             fusion.on_line(line[:-1])
 
 
-def serve_thread(conn, fusion):
+def run_thread(body, *args):
+    """Entry point of every io thread: block SIGINT, run body, and if it raises take io down.
+
+    A dead client or accelerometer thread would leave io running camera-only with no warning (this happened on the
+    bench when an assert killed the ultrasonic client), so the failure goes to the main thread as a SIGINT: it raises
+    KeyboardInterrupt there, the finally block switches the outputs off, and io exits with the traceback."""
     block_sigint()
-    serve_client(conn, fusion)
+    try:
+        body(*args)
+    except Exception:
+        traceback.print_exc()
+        os.kill(os.getpid(), signal.SIGINT)
 
 
-def watchdog_thread(fusion):
-    block_sigint()
+def watchdog_loop(fusion):
     while True:
         time.sleep(BOX_STALE_S / 5)
         fusion.refresh()
 
 
-def fall_thread(accel, fusion):
-    block_sigint()
+def fall_loop(accel, fusion):
     detector = FallDetector()
     while True:
         if detector.update(time.monotonic(), accel.read()):
@@ -184,16 +192,16 @@ if __name__ == "__main__":
     ap.add_argument("--socket", default=SOCKET_PATH)
     args = ap.parse_args()
     block_sigint()  # the servo thread inherits the mask; main unblocks it below
-    actuator = Actuator()
+    actuator = Actuator(thread_runner=run_thread)
     signal.pthread_sigmask(signal.SIG_UNBLOCK, {signal.SIGINT})
     accel = Accel(helper=ACCEL_HELPER, hz=ACCEL_HZ)  # created here so a missing helper stops io at startup
     # No audio route yet (docs/decisions.md), so phrases are printed; swap print for the speaker later.
     fusion = Fusion(actuator, trace=bool(os.environ.get("IRIS_TRACE")), say=lambda text: print(text, flush=True))
     server = listen(args.socket)
-    threading.Thread(target=watchdog_thread, args=(fusion,), daemon=True).start()
-    threading.Thread(target=fall_thread, args=(accel, fusion), daemon=True).start()
+    threading.Thread(target=run_thread, args=(watchdog_loop, fusion), daemon=True).start()
+    threading.Thread(target=run_thread, args=(fall_loop, accel, fusion), daemon=True).start()
     try:
         while True:
-            threading.Thread(target=serve_thread, args=(server.accept()[0], fusion), daemon=True).start()
+            threading.Thread(target=run_thread, args=(serve_client, server.accept()[0], fusion), daemon=True).start()
     finally:
         actuator.off()
