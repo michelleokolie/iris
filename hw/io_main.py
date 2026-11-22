@@ -23,7 +23,8 @@ from accel import Accel
 from actuate import Actuator
 from describe import FALL, Box, identify, phrase, position
 from fall import FallDetector
-from fuse import fuse, range_level
+import fuse as fuse_settings
+from fuse import RangeLevel, fuse
 from speak import PhoneSpeaker
 
 SOCKET_PATH = "/tmp/iris.sock"
@@ -83,7 +84,7 @@ class Fusion:
         self._range = None  # (cm, closing, received_at) or None
         self._last = None
         self._last_key = None
-        self._range_level = 0  # last range level, for hysteresis
+        self._range_levels = RangeLevel()  # ultrasonic level: hysteresis down, CONFIRM readings to go up
         self._vision_t = None  # when the last vision line (box or Alert) arrived; None until the first
         self._camera_lost = False
         self._said_level = 0
@@ -98,6 +99,7 @@ class Fusion:
                 r = parse_range(line)
                 if r is not None:  # "range none" keeps the last good range until RANGE_HOLD_S passes
                     self._range = (*r, t)
+                    self._range_levels.update(*r)  # once per reading, so CONFIRM counts readings
             elif line.startswith("box "):
                 b = parse_box(line)
                 self._box = None if b is None else (b, t)
@@ -135,8 +137,9 @@ class Fusion:
             box = None
         box = None if box is None else box[0]
 
-        fused = fuse(self._camera, rng, self._range_level)
-        self._range_level = 0 if rng is None else range_level(*rng, self._range_level)
+        if rng is None:  # no current range: start over, so a stale level can't come back with the next reading
+            self._range_levels = RangeLevel()
+        fused = fuse(self._camera, None if rng is None else self._range_levels.level)
         if fused != self._last:
             self._last = fused
             self._actuator.alert(*fused)
@@ -278,6 +281,9 @@ if __name__ == "__main__":
         speaker.say(text)
 
     fusion = Fusion(actuator, trace=bool(os.environ.get("IRIS_TRACE")), say=say)
+    print(f"range levels: 3 under {fuse_settings.NEAR_CM:g} cm or closing > {fuse_settings.TTC_MIN_CLOSING:g} cm/s "
+          f"with < {fuse_settings.TTC_S:g} s to contact; 2 under {fuse_settings.MID_CM:g}; 1 under {fuse_settings.FAR_CM:g}; "
+          f"rise after {fuse_settings.CONFIRM} readings", flush=True)
     server = listen(args.socket)
     forward = RangeForward()  # SAMPLE: range lines copied to vision for its preview bar
     threading.Thread(target=run_thread, args=(speaker.serve,), daemon=True).start()
