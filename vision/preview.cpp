@@ -2,10 +2,13 @@
 // write pixels, post. Any failure is fatal (preview is opt-in, so a broken display should be loud).
 #include "preview.h"
 
+#include "glyphs.h"
+
 #include <algorithm>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <string>
 
 static void check(int rc, const char* what) {
     if (rc != 0) {
@@ -16,9 +19,11 @@ static void check(int rc, const char* what) {
 
 struct Rgb { uint8_t r, g, b; };
 static constexpr Rgb LEVEL_COLOUR[4] = {{40, 200, 40}, {150, 150, 150}, {240, 200, 0}, {230, 30, 30}};
-static constexpr Rgb GREY{170, 170, 170}, BLUE{60, 120, 255}, WHITE{255, 255, 255};
+static constexpr Rgb GREY{170, 170, 170}, BLUE{60, 120, 255}, WHITE{255, 255, 255}, BLACK{0, 0, 0};
 static constexpr float STRIP_LEFT = 0.33f, STRIP_RIGHT = 0.67f;  // same strip as decide.cpp
-static constexpr int BAR_H = 18;
+static constexpr int BAR_H = 22;
+static constexpr int TEXT_SCALE = 2;  // 5x7 glyphs drawn at 10x14
+static constexpr int GLYPH_W = 6 * TEXT_SCALE, GLYPH_H = 7 * TEXT_SCALE;
 
 Preview::Preview(int width, int height) : w_(width), h_(height) {
     check(screen_create_context(&ctx_, SCREEN_APPLICATION_CONTEXT), "screen_create_context");
@@ -27,8 +32,13 @@ Preview::Preview(int width, int height) : w_(width), h_(height) {
     check(screen_set_window_property_iv(win_, SCREEN_PROPERTY_FORMAT, &format), "window format");
     int usage = SCREEN_USAGE_NATIVE | SCREEN_USAGE_WRITE;
     check(screen_set_window_property_iv(win_, SCREEN_PROPERTY_USAGE, &usage), "window usage");
+    // The desktop's window manager otherwise resizes the window (stretching the 640x480 image): lay it out
+    // ourselves at the image's exact size.
+    int self_layout = 1;
+    check(screen_set_window_property_iv(win_, SCREEN_PROPERTY_SELF_LAYOUT, &self_layout), "window self layout");
     int size[2] = {w_, h_};
     check(screen_set_window_property_iv(win_, SCREEN_PROPERTY_SIZE, size), "window size");
+    check(screen_set_window_property_iv(win_, SCREEN_PROPERTY_SOURCE_SIZE, size), "window source size");
     check(screen_set_window_property_iv(win_, SCREEN_PROPERTY_BUFFER_SIZE, size), "buffer size");
     const char id[] = "iris-vision";
     check(screen_set_window_property_cv(win_, SCREEN_PROPERTY_ID_STRING, sizeof(id), id), "window id");
@@ -68,6 +78,21 @@ void Preview::show(const Frame& frame, const std::vector<Box>& boxes, const std:
         }
     };
 
+    // Text with a filled background, uppercase A-Z, 0-9, '.', '-', space (glyphs.h).
+    auto text = [&](int x, int y, const std::string& str, Rgb fg, Rgb bg) {
+        for (int yy = y - 2; yy < y + GLYPH_H + 2; ++yy)
+            for (int xx = x - 2; xx < x + static_cast<int>(str.size()) * GLYPH_W + 1; ++xx) put(xx, yy, bg);
+        for (size_t i = 0; i < str.size(); ++i) {
+            const uint8_t* g = glyph(str[i]);
+            for (int row = 0; row < 7; ++row)
+                for (int col = 0; col < 5; ++col)
+                    if (g[row] & (0x10 >> col))
+                        for (int dy = 0; dy < TEXT_SCALE; ++dy)
+                            for (int dx = 0; dx < TEXT_SCALE; ++dx)
+                                put(x + static_cast<int>(i) * GLYPH_W + col * TEXT_SCALE + dx, y + row * TEXT_SCALE + dy, fg);
+        }
+    };
+
     // Camera frame (BGR) -> window (B, G, R, X).
     for (int y = 0; y < h_; ++y) {
         const uint8_t* src = &frame.bgr[static_cast<size_t>(y) * frame.width * 3];
@@ -82,6 +107,13 @@ void Preview::show(const Frame& frame, const std::vector<Box>& boxes, const std:
         for (int y = BAR_H; y < h_; ++y) put(static_cast<int>(sx * w_), y, BLUE);
     for (const auto& b : boxes) rect(b, 2, GREY);
     if (primary) rect(*primary, 4, LEVEL_COLOUR[alert.level]);
+    // Name and score on each box, above its top edge (inside it when there's no room under the bar).
+    for (const auto& b : boxes) {
+        std::string label = std::string(coco_name(std::stoi(b.label))) + " " + std::to_string(static_cast<int>(b.score * 100));
+        int x = static_cast<int>(b.x1 * w_) + 2, y = static_cast<int>(b.y1 * h_) - GLYPH_H - 4;
+        if (y < BAR_H + 2) y = std::max(static_cast<int>(b.y1 * h_), BAR_H) + 4;  // no room above: inside the box
+        text(x, y, label, WHITE, BLACK);
+    }
 
     // Level bar with a white marker on the free side (centre for "ahead", none for "clear").
     for (int y = 0; y < BAR_H; ++y)
@@ -90,6 +122,8 @@ void Preview::show(const Frame& frame, const std::vector<Box>& boxes, const std:
     if (alert.direction != "clear")
         for (int y = 3; y < BAR_H - 3; ++y)
             for (int x = mark - 12; x <= mark + 12; ++x) put(x, y, WHITE);
+    text(6, (BAR_H - GLYPH_H) / 2, "LEVEL " + std::to_string(alert.level) + " " + alert.direction, BLACK,
+         LEVEL_COLOUR[alert.level]);
 
     int dirty[4] = {0, 0, w_, h_};
     check(screen_post_window(win_, buf[0], 1, dirty, 0), "screen_post_window");
