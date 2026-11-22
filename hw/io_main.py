@@ -2,7 +2,8 @@
 
 Usage: sudo python3 hw/io_main.py [--socket PATH]   (needs hw/accel built: gcc -o hw/accel hw/accel.c)
 Several clients may connect at once (vision, ultrasonic), one thread each. A thread reads the
-accelerometer and reports falls. Line formats (docs/interfaces.md):
+accelerometer and reports falls; another serves the phone page that speaks io's sentences (hw/speak.py,
+http://<pi address>:8080/). Line formats (docs/interfaces.md):
   vision:     "<level> <direction>\n"  level 0-3, direction left|right|ahead|clear;
               "0 clear" is the only level-0 message
               "box <label> <x1> <y1> <x2> <y2>\n" or "box none\n": the box driving the Alert
@@ -19,9 +20,10 @@ import traceback
 
 from accel import Accel
 from actuate import Actuator
-from describe import Box, identify, phrase
+from describe import FALL, Box, identify, phrase, position
 from fall import FallDetector
 from fuse import fuse, range_level
+from speak import PhoneSpeaker
 
 SOCKET_PATH = "/tmp/iris.sock"
 ACCEL_HELPER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "accel")
@@ -108,7 +110,7 @@ class Fusion:
         with self._lock:
             if self._trace:
                 print(f"{self._now():.4f} fall", flush=True)
-            self._say("Fall detected")
+            self._say(FALL)
 
     def _update(self, t):
         rng = self._range
@@ -126,15 +128,16 @@ class Fusion:
             self._last = fused
             self._actuator.alert(*fused)
         name = identify(box, rng)
-        key = (fused, name, rng is not None)
-        if key == self._last_key:  # speak on a change of level, direction, name or having a distance, not of its value
+        where = position(box)
+        key = (0,) if fused[0] == 0 else (fused[0], where, name, rng is not None)  # level 0 always says "path clear"
+        if key == self._last_key:  # speak on a change of level, position, name or having a distance, not of its value
             return
         escalates = fused[0] > self._said_level
         if escalates or self._said_t is None or t - self._said_t >= SAY_MIN_GAP_S:
             self._last_key = key
             self._said_level = fused[0]
             self._said_t = t
-            self._say(phrase(*fused, name, rng))  # otherwise a later refresh() says it once the gap has passed
+            self._say(phrase(fused[0], where, name, rng))  # otherwise a later refresh() says it once the gap has passed
 
 
 def block_sigint():
@@ -195,9 +198,15 @@ if __name__ == "__main__":
     actuator = Actuator(thread_runner=run_thread)
     signal.pthread_sigmask(signal.SIG_UNBLOCK, {signal.SIGINT})
     accel = Accel(helper=ACCEL_HELPER, hz=ACCEL_HZ)  # created here so a missing helper stops io at startup
-    # No audio route yet (docs/decisions.md), so phrases are printed; swap print for the speaker later.
-    fusion = Fusion(actuator, trace=bool(os.environ.get("IRIS_TRACE")), say=lambda text: print(text, flush=True))
+    speaker = PhoneSpeaker()  # binds the port here so a port already in use stops io at startup
+
+    def say(text):  # every sentence goes to the console and to the phone page
+        print(text, flush=True)
+        speaker.say(text)
+
+    fusion = Fusion(actuator, trace=bool(os.environ.get("IRIS_TRACE")), say=say)
     server = listen(args.socket)
+    threading.Thread(target=run_thread, args=(speaker.serve,), daemon=True).start()
     threading.Thread(target=run_thread, args=(watchdog_loop, fusion), daemon=True).start()
     threading.Thread(target=run_thread, args=(fall_loop, accel, fusion), daemon=True).start()
     try:
