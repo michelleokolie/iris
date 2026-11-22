@@ -3,11 +3,13 @@
 // Without socket_path it only prints (for testing without io running).
 // VISION_DEBUG=1 also prints every box and writes /tmp/vision.ppm with boxes drawn.
 // VISION_DEBOUNCE=up,down,turn overrides the debounce frame counts (default 1,3,2) for tuning.
+// VISION_PREVIEW=1 opens a live window on the Pi's screen (VNC): frame, boxes, in-path strip, level bar.
 
 #include "capture.h"
 #include "debounce.h"
 #include "decide.h"
 #include "detect.h"
+#include "preview.h"
 
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -93,6 +95,8 @@ int main(int argc, char** argv) {
     if (const char* d = std::getenv("VISION_DEBOUNCE")) std::sscanf(d, "%d,%d,%d", &up, &down, &turn);
     std::printf("debounce frames: up %d, down %d, turn %d\n", up, down, turn);
     Debounce debounce(up, down, turn);
+    const bool preview_on = std::getenv("VISION_PREVIEW") != nullptr;
+    std::optional<Preview> preview;  // created on the first frame, which gives its size
 
     for (;;) {
         Frame frame = capture.next();
@@ -108,7 +112,12 @@ int main(int argc, char** argv) {
             write_debug_ppm(frame, boxes);
         }
 
-        if (fd >= 0) send_line(fd, box_line(primary_box(boxes)));
+        std::optional<Box> primary = primary_box(boxes);
+        if (preview_on) {
+            if (!preview) preview.emplace(frame.width, frame.height);
+            preview->show(frame, boxes, primary, alert);
+        }
+        if (fd >= 0) send_line(fd, box_line(primary));
 
         std::optional<Alert> stable = debounce.update(alert);
         if (!stable) continue;

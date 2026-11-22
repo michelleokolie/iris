@@ -25,7 +25,7 @@ Build once on the Pi (from the repo root; the ultrasonic line needs `~/qnx-rpi` 
 ```
 gcc -o hw/accel hw/accel.c
 clang++ -std=c++17 -O2 hw/ultrasonic.cpp -o hw/ultrasonic -I$HOME/qnx-rpi/common/system/gpio -I$HOME/qnx-rpi/common/rpi_gpio/public -L$HOME/qnx-rpi/common/rpi_gpio/build/aarch64le-debug -lrpi_gpio -lm -lsocket
-cd vision && clang++ -std=c++17 -O2 main.cpp capture.cpp detect.cpp decide.cpp debounce.cpp -o vision -lcamapi -lonnxruntime -lsocket
+cd vision && clang++ -std=c++17 -O2 main.cpp capture.cpp detect.cpp decide.cpp debounce.cpp preview.cpp -o vision -lcamapi -lonnxruntime -lsocket -lscreen
 ```
 Then `sudo sh hw/run.sh` starts io, vision and the reader, restarts any that dies (1 s later) and stops everything on Ctrl-C. Model: `/data/home/qnxuser/capture/deimv2_femto.onnx`, or `sudo env IRIS_MODEL=/path/model.onnx sh hw/run.sh`. Logs: `/tmp/iris/{io,vision,ultrasonic}.log`. More than 5 exits of one process in 30 s prints a FAULT line, stops everything and exits 1. Vision needs about 12 s to load after each start; io says "Camera lost" meanwhile. A stop waits for every program (the reader must run its GPIO cleanup, so it is never killed with SIGKILL).
 
