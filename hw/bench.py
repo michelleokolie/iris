@@ -1,11 +1,11 @@
-"""Bench test on the Pi: sudo python3 hw/bench.py led | buzzer | servo | alerts"""
+"""Bench test on the Pi: sudo python3 hw/bench.py led | servo | alerts"""
 import sys
 import time
 
 import actuate
 
-if len(sys.argv) != 2 or sys.argv[1] not in {"led", "buzzer", "servo", "alerts"}:
-    raise SystemExit("usage: sudo python3 hw/bench.py led | buzzer | servo | alerts")
+if len(sys.argv) != 2 or sys.argv[1] not in {"led", "servo", "alerts"}:
+    raise SystemExit("usage: sudo python3 hw/bench.py led | servo | alerts")
 mode = sys.argv[1]
 a = actuate.Actuator()
 
@@ -15,14 +15,6 @@ if mode == "led":
         a._gpio.write(pin, True)
         time.sleep(1)
         a._gpio.write(pin, False)
-elif mode == "buzzer":
-    for _ in range(3):  # three 0.5 s tones at actuate.TONE_HZ
-        print("tone", actuate.TONE_HZ, "Hz")
-        a._tone.ChangeDutyCycle(actuate.TONE_DUTY)
-        time.sleep(0.5)
-        a._tone.ChangeDutyCycle(0)
-        time.sleep(0.5)
-    a.off()
 elif mode == "servo":
     for _ in range(3):
         for us in (actuate.TAP_US, actuate.REST_US):
