@@ -32,6 +32,14 @@ Preview::Preview(int width, int height) : w_(width), h_(height) {
     check(screen_set_window_property_iv(win_, SCREEN_PROPERTY_BUFFER_SIZE, size), "buffer size");
     const char id[] = "iris-vision";
     check(screen_set_window_property_cv(win_, SCREEN_PROPERTY_ID_STRING, sizeof(id), id), "window id");
+    // On top of the desktop (its wallpaper is a window too, so a default z-order leaves us hidden), visible,
+    // just below the taskbar.
+    int zorder = 1000;
+    check(screen_set_window_property_iv(win_, SCREEN_PROPERTY_ZORDER, &zorder), "window zorder");
+    int visible = 1;
+    check(screen_set_window_property_iv(win_, SCREEN_PROPERTY_VISIBLE, &visible), "window visible");
+    int pos[2] = {0, 48};
+    check(screen_set_window_property_iv(win_, SCREEN_PROPERTY_POSITION, pos), "window position");
     check(screen_create_window_buffers(win_, 2), "screen_create_window_buffers");
 }
 
