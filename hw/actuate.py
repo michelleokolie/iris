@@ -3,8 +3,8 @@
 GPIO is driven by text writes to /dev/gpio/N (QNX rpi_gpio). The servo is on GPIO5, which has no hardware
 PWM, so it is software PWM from a thread.
 
-States (level): 0 green / 1 green (far, not a warning) / 2 yellow / 3 red. The servo taps at every level above 0, faster as the
-level rises. No buzzer: the passive buzzer was dropped (see docs/decisions.md); the phone speaks instead.
+States (level): 0 green / 1 green (far, not a warning) / 2 yellow / 3 red. The servo taps only for the
+warnings (2 and 3), faster at 3. No buzzer: the passive buzzer was dropped (see docs/decisions.md); the phone speaks instead.
 """
 import threading
 import time
@@ -21,7 +21,7 @@ TAP_US = 1800
 PERIOD_S = 0.020
 DWELL_PULSES = 10           # 0.2 s to let the horn reach each position
 REST_SLICE_S = 0.05         # granularity for noticing a level change between taps
-TAP_CYCLE_S = {1: 1.5, 2: 0.8, 3: 0.4}  # level -> time per tap
+TAP_CYCLE_S = {2: 0.8, 3: 0.4}  # level -> time per tap; levels 0 and 1 don't tap
 
 
 class DevGpio:
@@ -95,7 +95,7 @@ class Actuator:
     def _servo_loop(self):
         while not self._stopped:
             level = self._level
-            if level == 0:
+            if level not in TAP_CYCLE_S:  # 0 and 1 are not warnings: the servo stays still
                 time.sleep(REST_SLICE_S)
                 continue
             self._tap(level)

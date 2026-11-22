@@ -29,7 +29,7 @@ sudo VISION_PREVIEW=1 ./vision deimv2_femto.onnx /tmp/iris.sock
 ```
 
 Tuning on the board without rebuilding (the startup lines print the values in use):
-- `VISION_LEVELS=far,close,very_close`: in-path box heights for levels 1/2/3 (default `0.25,0.5,0.8`). Raise them for fewer warnings.
+- `VISION_LEVELS=far,close,very_close,close_w,very_close_w`: in-path box size for the levels (default `0.25,0.5,0.8,0.2,0.4`): heights for 1/2/3, widths for 2/3. The preview labels show each box's `W` and `H` in % to compare against. Raise them for fewer warnings.
 - `VISION_DEBOUNCE=up,down,turn`: frames before an Alert changes (default `1,3,2`).
 - `VISION_SCORE=0.4`: detector confidence cut-off.
 

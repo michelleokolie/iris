@@ -3,7 +3,8 @@
 // Without socket_path it only prints (for testing without io running).
 // VISION_DEBUG=1 also prints every box and writes /tmp/vision.ppm with boxes drawn.
 // VISION_DEBOUNCE=up,down,turn overrides the debounce frame counts (default 1,3,2) for tuning.
-// VISION_LEVELS=far,close,very_close overrides the in-path box heights for levels 1/2/3 (default 0.25,0.5,0.8).
+// VISION_LEVELS=far,close,very_close,close_w,very_close_w overrides the in-path box sizes for the levels
+// (default 0.25,0.5,0.8,0.2,0.4: heights for 1/2/3, widths for 2/3).
 // VISION_PREVIEW=1 opens a live window on the Pi's screen (VNC): frame, boxes, in-path strip, level bar.
 
 #include "capture.h"
@@ -126,7 +127,8 @@ int main(int argc, char** argv) {
     if (const char* d = std::getenv("VISION_DEBOUNCE")) std::sscanf(d, "%d,%d,%d", &up, &down, &turn);
     std::printf("debounce frames: up %d, down %d, turn %d\n", up, down, turn);
     LevelThresholds lv = level_thresholds();
-    std::printf("level box heights: far %.2f, close %.2f, very close %.2f\n", lv.far, lv.close, lv.very_close);
+    std::printf("levels: 1 if h > %.2f; 2 if h > %.2f and w > %.2f; 3 if h > %.2f and w > %.2f\n", lv.far, lv.close,
+                lv.close_w, lv.very_close, lv.very_close_w);
     Debounce debounce(up, down, turn);
     const bool preview_on = std::getenv("VISION_PREVIEW") != nullptr;
     std::optional<Preview> preview;  // created on the first frame, which gives its size

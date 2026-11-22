@@ -109,7 +109,10 @@ void Preview::show(const Frame& frame, const std::vector<Box>& boxes, const std:
     if (primary) rect(*primary, 4, LEVEL_COLOUR[alert.level]);
     // Name and score on each box, above its top edge (inside it when there's no room under the bar).
     for (const auto& b : boxes) {
-        std::string label = std::string(coco_name(std::stoi(b.label))) + " " + std::to_string(static_cast<int>(b.score * 100));
+        // name, score, then width and height in % of the frame (what the level thresholds compare against)
+        std::string label = std::string(coco_name(std::stoi(b.label))) + " " + std::to_string(static_cast<int>(b.score * 100)) +
+                            " W" + std::to_string(static_cast<int>((b.x2 - b.x1) * 100)) + " H" +
+                            std::to_string(static_cast<int>((b.y2 - b.y1) * 100));
         int x = static_cast<int>(b.x1 * w_) + 2, y = static_cast<int>(b.y1 * h_) - GLYPH_H - 4;
         if (y < BAR_H + 2) y = std::max(static_cast<int>(b.y1 * h_), BAR_H) + 4;  // no room above: inside the box
         text(x, y, label, WHITE, BLACK);
