@@ -1,7 +1,7 @@
 // HC-SR04 reader for QNX (Pi 5). Event-driven like QNX's own sample
 // (qnx/Raspberry-Pi-Hardware-Component-Samples, hc-sr04_ultrasonic_sensor/c): rpi_gpio sends a
 // pulse to a QNX channel on each echo edge, so there is no busy-wait and no GIL contention
-// with io. Same filtering as hw/ultrasonic.py: median of 3, closing speed over the last 7.
+// with io. Filtering: jump rejection, median of 3, closing speed = least-squares slope over the last 7.
 //
 // Sends to io over the UNIX socket, one line per measurement (docs/interfaces.md):
 //   "range <cm> <closing_cm_per_s>\n"   closing > 0 = getting closer
@@ -19,6 +19,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cmath>
 #include <cerrno>
 #include <csignal>
 #include <cstdio>
@@ -26,6 +27,7 @@
 #include <cstring>
 #include <ctime>
 #include <deque>
+#include <optional>
 #include <string>
 #include <utility>
 
@@ -35,13 +37,72 @@ extern "C" {
 
 static constexpr double CM_PER_US = 0.0343 / 2.0;     // speed of sound, halved for the round trip
 static constexpr uint64_t EDGE_TIMEOUT_NS = 30'000'000;  // ~5 m round trip
+static constexpr double MIN_PULSE_US = 120;           // ~2 cm, the HC-SR04's minimum range: a shorter pulse is a glitch
 static constexpr double PERIOD_S = 0.060;             // HC-SR04 needs ~60 ms between pings
 static constexpr size_t FILTER_SIZE = 3;
 static constexpr size_t WINDOW_SIZE = 7;
+static constexpr size_t MIN_SLOPE_POINTS = 3;         // no closing speed until the window holds this many
+static constexpr double JUMP_CM = 50;                 // a reading this far from the last accepted one needs confirming
+static constexpr double CONFIRM_CM = 15;              // ...by the next reading agreeing within this
+static constexpr double MAX_CLOSING = 300;            // cm/s; walking is ~140
 static constexpr int EVENT_ECHO = 1;
 
 static volatile sig_atomic_t running = 1;
 static int chid;
+
+// --- range filter (pure; compiled on its own by the scratch checks) ---
+struct Output { double cm, closing; };
+
+// Closing speed (cm/s, > 0 = getting closer) from (time_s, cm) points: negated least-squares slope, clamped.
+static double closing_speed(const std::deque<std::pair<double, double>>& pts) {
+    if (pts.size() < MIN_SLOPE_POINTS) return 0.0;
+    double n = static_cast<double>(pts.size()), st = 0, sd = 0;
+    for (auto [t, d] : pts) { st += t; sd += d; }
+    double mt = st / n, md = sd / n, num = 0, den = 0;
+    for (auto [t, d] : pts) { num += (t - mt) * (d - md); den += (t - mt) * (t - mt); }
+    return std::clamp(-num / den, -MAX_CLOSING, MAX_CLOSING);
+}
+
+class RangeFilter {
+public:
+    // One raw reading; an Output when there is a value to send, nothing while a jump awaits confirmation
+    // or the median has fewer than FILTER_SIZE readings.
+    std::optional<Output> update(double t, double cm) {
+        if (accepted_ && std::abs(cm - *accepted_) > JUMP_CM) {
+            bool confirmed = pending_ && std::abs(cm - *pending_) <= CONFIRM_CM;
+            if (!confirmed) {
+                pending_ = cm;
+                return std::nullopt;
+            }
+            raw_.clear();  // the new surface starts a new window
+            history_.clear();
+            raw_.push_back(*pending_);
+        }
+        pending_.reset();
+        accepted_ = cm;
+        raw_.push_back(cm);
+        if (raw_.size() > FILTER_SIZE) raw_.pop_front();
+        if (raw_.size() < FILTER_SIZE) return std::nullopt;
+        std::deque<double> sorted(raw_);
+        std::sort(sorted.begin(), sorted.end());
+        double median = sorted[FILTER_SIZE / 2];
+        history_.emplace_back(t, median);
+        if (history_.size() > WINDOW_SIZE) history_.pop_front();
+        return Output{median, closing_speed(history_)};
+    }
+    // No echo: the next readings start a new window (the jump reference stays: a gap is not a new target).
+    void gap() {
+        raw_.clear();
+        history_.clear();
+    }
+
+private:
+    std::deque<double> raw_;
+    std::deque<std::pair<double, double>> history_;  // (time_s, median_cm)
+    std::optional<double> accepted_;                 // last accepted raw reading
+    std::optional<double> pending_;                  // an unconfirmed jump
+};
+// --- end range filter ---
 
 static void check(int rc, const char* what) {
     if (rc != 0) {
@@ -80,7 +141,9 @@ static double read_cm(int trig) {
     if (!wait_edge(EDGE_TIMEOUT_NS)) return -1;  // rising
     double t_rise = now_s();
     if (!wait_edge(EDGE_TIMEOUT_NS)) return -1;  // falling
-    return (now_s() - t_rise) * 1e6 * CM_PER_US;
+    double pulse_us = (now_s() - t_rise) * 1e6;
+    if (pulse_us < MIN_PULSE_US) return -1;  // a near-zero edge pair is not an echo ("range none", never "range 0.0")
+    return pulse_us * CM_PER_US;
 }
 
 static int connect_io(const char* path) {
@@ -128,38 +191,29 @@ int main(int argc, char** argv) {
     check(rpi_gpio_setup_pull(echo, GPIO_IN, GPIO_PUD_OFF), "setup echo");
     check(rpi_gpio_add_event_detect(echo, coid, GPIO_RISING | GPIO_FALLING, EVENT_ECHO), "event detect");
     check(rpi_gpio_output(trig, GPIO_LOW), "trigger low");
+    // Every exit path must release the event registration: a reader that dies without rpi_gpio_cleanup() leaves
+    // GPIO 16 busy ("event detect: Resource busy") until the Pi reboots. exit() runs this; a dead io is then
+    // an exit(1) from send_line (EPIPE, SIGPIPE ignored) instead of a kill.
+    std::atexit([] { rpi_gpio_cleanup(); });
+    signal(SIGPIPE, SIG_IGN);
     sleep(1);  // let the sensor settle
 
     int fd = connect_io(path);
-    std::deque<double> raw;
-    std::deque<std::pair<double, double>> history;  // (time_s, filtered_cm)
+    RangeFilter filter;
 
     while (running) {
         double t0 = now_s();
         double cm = read_cm(trig);
         if (cm < 0) {
-            raw.clear();
-            history.clear();  // don't compute speed across a gap
+            filter.gap();
             send_line(fd, "range none\n");
-        } else {
-            raw.push_back(cm);
-            if (raw.size() > FILTER_SIZE) raw.pop_front();
-            if (raw.size() == FILTER_SIZE) {
-                std::deque<double> sorted(raw);
-                std::sort(sorted.begin(), sorted.end());
-                history.emplace_back(now_s(), sorted[FILTER_SIZE / 2]);
-                if (history.size() > WINDOW_SIZE) history.pop_front();
-                auto [t_old, d_old] = history.front();
-                auto [t_new, d_new] = history.back();
-                double closing = t_new > t_old ? (d_old - d_new) / (t_new - t_old) : 0.0;
-                char line[64];
-                std::snprintf(line, sizeof(line), "range %.1f %.1f\n", d_new, closing);
-                send_line(fd, line);
-            }
+        } else if (auto out = filter.update(now_s(), cm)) {
+            char line[64];
+            std::snprintf(line, sizeof(line), "range %.1f %.1f\n", out->cm, out->closing);
+            send_line(fd, line);
         }
         double rest = PERIOD_S - (now_s() - t0);
         if (rest > 0) usleep(static_cast<useconds_t>(rest * 1e6));
     }
-    check(rpi_gpio_cleanup(), "cleanup");
-    return 0;
+    return 0;  // the atexit handler runs rpi_gpio_cleanup()
 }

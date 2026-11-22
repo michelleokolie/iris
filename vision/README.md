@@ -3,7 +3,7 @@
 capture -> detect (DEIMv2 via onnxruntime) -> decide, sends Alert lines to `/tmp/iris.sock` (see docs/interfaces.md).
 
 Files: `capture.*` (QNX camera API), `detect.*` (DEIMv2), `decide.*` (rules), `debounce.*` (stable Alerts), `main.cpp` (loop + socket).
-Tools: `grab_frame.cpp` (save one frame), `ort_smoke.cpp` (time any ONNX model), `decide_test.cpp`, `debounce_test.cpp` (run anywhere).
+Tools: `grab_frame.cpp` (save one frame), `ort_smoke.cpp` (time any ONNX model).
 
 ## Build on the Pi
 
@@ -22,4 +22,4 @@ Stop `camera_mux` first. Model needs both `deimv2_femto.onnx` and `deimv2_femto.
 ./vision deimv2_femto.onnx /tmp/iris.sock   # also send Alerts to io (io must be listening)
 ```
 
-Start `io` first (`hw/io_main.py`), then `vision`. The ultrasonic reader (`hw/ultrasonic.cpp`) also connects to `io` on `/tmp/iris.sock`; `io` combines it with the camera Alert (`hw/fuse.py`), so `vision` needs nothing extra.
+Start `io` first (`hw/io_main.py`), then `vision`. The ultrasonic reader (`hw/ultrasonic.cpp`) also connects to `io` on `/tmp/iris.sock`; `io` combines it with the camera Alert (`hw/fuse.py`). Besides the debounced Alert, `vision` sends a `box` line every frame (the in-path box that drives the Alert, see docs/interfaces.md) so `io` can check labels and sizes against the ultrasonic distance.

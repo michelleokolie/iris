@@ -29,13 +29,13 @@ git worktree add ..\iris-submit -b mount-submission
 ## C. Software (`vision-alert`)
 `vision` is C++ on QNX (camera API is C only, Python onnxruntime is broken); see docs/interfaces.md and vision/README.md.
 - [x] capture: frame loop from sensor unit 5 (`vision/capture.cpp`)
-- [x] `decide` in C++ (port of PR #3), `vision/decide_test.cpp` passes PR #3's cases
+- [x] `decide` in C++ (port of PR #3)
 - [x] `detect` in C++: DEIMv2-Femto via onnxruntime, ~8 fps full loop on the Pi
 - [x] Alert lines over /tmp/iris.sock drive io + real LEDs on the board
 - [x] Debounce Alerts (vision/debounce.*), on the board with 1/3/2; tuning via VISION_DEBOUNCE ongoing
 - [x] "ahead" = sides within 0.05 (decide.cpp, interfaces.md)
-- [x] Ultrasonic fused with the camera in io (hw/fuse.py, PR #12); vision unchanged, still sends Alerts only
-- [ ] (low priority) Camera level 3 needs box height > 0.8, drop the y2 > 0.9 test (tilt cuts feet off and fakes "imminent"). Only matters when the ultrasonic has no reading (io ignores camera level 3 otherwise); worst case is a false alarm. Apply after `box-fusion` merges (same lines in decide.cpp)
+- [x] Ultrasonic fused with the camera in io (hw/fuse.py, PR #12); vision also sends a `box` line per frame for label/size checks (`box-fusion`)
+- [x] Camera level 3 = in-path box taller than 0.8 of the frame (no y2 test); verify on the board with a person 3-4 m away (expect level 2)
 - [ ] `speak` (Python, in `io`): phrases for Alert and fall; audio route (phone / dongle / Bluetooth)
 
 ## D. Build + submission (`mount-submission`)

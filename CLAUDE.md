@@ -7,6 +7,7 @@ Prize targets: QNX embedded AI (must run on QNX, use an open-source QNX AI modul
 ## Rules
 - No defensive coding. No fallback detectors, no swallowed exceptions, no speculative try/except, no handling of impossible states. Validate only at hardware/user-input boundaries; let everything else crash loudly.
 - Keep modules tiny. Only the interfaces in `docs/interfaces.md` cross module boundaries; change that file first if an interface must change.
+- Code layout: `hw/` (the io process, the ultrasonic reader, hardware helpers) and `vision/` (C++ vision); docs in `docs/`. Do not create `src/` or `tests/` folders (the test suite was removed on purpose); new code goes in the folder of its stream.
 - One worktree and branch per stream (see `docs/tasks.md`). Never edit files owned by another stream.
 - Log decisions in `docs/decisions.md` (one line each) so a cleared session can resume cold.
 - Claude may run read-only and bench-test commands on the board over SSH (key auth) once the human has wired a part. Powering down and wiring stay with the human; ask for exact error output when something fails.
@@ -14,9 +15,10 @@ Prize targets: QNX embedded AI (must run on QNX, use an open-source QNX AI modul
 ## Pipeline
 vision (C++): capture -> detect (onnxruntime) -> decide --Alert over /tmp/iris.sock--> io (Python): fuse -> actuate (servo, LEDs) + speak (audio)
 ultrasonic (C++, hw/ultrasonic.cpp) --Range over /tmp/iris.sock--> io (Python): fuse
+accelerometer (hw/accel C helper) -> io (Python thread): fall detection (hw/fall.py) -> speak
 
 ## Hardware
-Pi 5 + QNX, 1 USB webcam (MVP; 2nd camera is stretch), servo (tap arm), 4 LEDs (2 blue, 1 red, 1 green), 3-axis accelerometer (I2C), rotary angle sensor (analog, needs Grove Base Hat/ADC), IR reflective sensor (hand-wave trigger), USB-C power bank. Pi 5 has no headphone jack and no analog input. Power the servo from the bank/separate 5V rail, shared ground.
+Pi 5 + QNX, 1 USB webcam (MVP; 2nd camera is stretch), servo (tap arm), 2 LEDs (1 red, 1 green), 3-axis accelerometer (I2C), rotary angle sensor (analog, needs Grove Base Hat/ADC), IR reflective sensor (hand-wave trigger), USB-C power bank. Pi 5 has no headphone jack and no analog input. Power the servo from the bank/separate 5V rail, shared ground.
 
 ## Context hygiene
 `/clear` between streams. Start each stream by reading this file, `docs/interfaces.md`, `docs/tasks.md`.

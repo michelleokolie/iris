@@ -8,24 +8,33 @@ NEAR_CM = 60    # closer than this: imminent
 MID_CM = 120    # closer than this: near
 FAR_CM = 250    # closer than this: far
 TTC_S = 1.5     # time-to-contact under this: imminent
+HYSTERESIS = 1.15   # stay in a level until the distance is 15% past its limit (a reading wanders +-6 cm)
+TTC_MIN_CLOSING = 70  # cm/s; closing speed of a stationary object reads +-60 on the board, walking is 100+
 
 
-def range_level(cm, closing):
-    if cm < NEAR_CM or (closing > 0 and cm / closing < TTC_S):
+def range_level(cm, closing, prev=0):
+    """Level for a range reading; prev = the level this function returned last time (for hysteresis)."""
+    def within(limit, level):
+        return cm < limit * (HYSTERESIS if prev >= level else 1.0)
+
+    if within(NEAR_CM, 3) or (closing > TTC_MIN_CLOSING and cm / closing < TTC_S):
         return 3
-    if cm < MID_CM:
+    if within(MID_CM, 2):
         return 2
-    if cm < FAR_CM:
+    if within(FAR_CM, 1):
         return 1
     return 0
 
 
-def fuse(camera, rng):
-    """The ultrasonic sets near/imminent; the camera can only add "far" and the direction."""
+def fuse(camera, rng, prev=0):
+    """Either sensor can raise the level, neither can lower the other's (the sonar beam is narrower than the
+    camera's in-path strip, so a person off-centre is seen by the camera only). The camera gives the direction.
+
+    prev = the previous range level, passed through to range_level."""
     cam_level, direction = camera
     if rng is None:
         return camera
-    level = max(range_level(*rng), min(cam_level, 1))
+    level = max(range_level(*rng, prev), cam_level)
     if level == 0:
         return 0, "clear"
     if cam_level == 0:

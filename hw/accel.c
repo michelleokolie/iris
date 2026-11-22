@@ -28,7 +28,9 @@ static void read_xyz(uint8_t out[3])
         .hdr = { .slave = { .addr = ADDR, .fmt = I2C_ADDRFMT_7BIT }, .send_len = 1, .recv_len = 3, .stop = 1 },
         .data = { 0x00, 0, 0, 0 } };
     if (devctl(fd, DCMD_I2C_SENDRECV, &r, sizeof(r), NULL) != 0) { perror("sendrecv"); exit(1); }
-    for (int i = 0; i < 3; i++) out[i] = r.data[i + 1];
+    // devctl returns the received bytes from the START of the buffer, over the byte we sent
+    // (data[1..3] was off by one: it printed Y, Z and a constant 0 as x, y, z).
+    for (int i = 0; i < 3; i++) out[i] = r.data[i];
 }
 
 int main(int argc, char **argv)
@@ -47,6 +49,7 @@ int main(int argc, char **argv)
     fd = open(argv[1], O_RDWR);
     if (fd < 0) { perror("open"); return 1; }
     write_reg(REG_MODE, 0x01);
+    usleep(100000);  // the first read straight after waking the chip returns 0 0 0, before any conversion
     for (;;) {
         uint8_t b[3];
         do read_xyz(b); while ((b[0] | b[1] | b[2]) & INVALID);   // bit6 set = read raced an update; retry
