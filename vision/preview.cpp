@@ -54,7 +54,7 @@ Preview::Preview(int width, int height) : w_(width), h_(height) {
 }
 
 void Preview::show(const Frame& frame, const std::vector<Box>& boxes, const std::optional<Box>& primary,
-                   const Alert& alert) {
+                   const Alert& alert, const std::string& note) {
     screen_buffer_t buf[2];
     check(screen_get_window_property_pv(win_, SCREEN_PROPERTY_RENDER_BUFFERS, reinterpret_cast<void**>(buf)),
           "render buffers");
@@ -124,6 +124,8 @@ void Preview::show(const Frame& frame, const std::vector<Box>& boxes, const std:
             for (int x = mark - 12; x <= mark + 12; ++x) put(x, y, WHITE);
     text(6, (BAR_H - GLYPH_H) / 2, "LEVEL " + std::to_string(alert.level) + " " + alert.direction, BLACK,
          LEVEL_COLOUR[alert.level]);
+    if (!note.empty())  // right-aligned, clear of the level text
+        text(w_ - static_cast<int>(note.size()) * GLYPH_W - 6, (BAR_H - GLYPH_H) / 2, note, WHITE, BLACK);
 
     int dirty[4] = {0, 0, w_, h_};
     check(screen_post_window(win_, buf[0], 1, dirty, 0), "screen_post_window");
