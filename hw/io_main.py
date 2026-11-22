@@ -12,7 +12,7 @@ IRIS_TRACE=1 prints a monotonic timestamp per received line, for latency measure
 """
 import argparse
 import os
-import select
+import queue
 import signal
 import socket
 import threading
@@ -170,31 +170,53 @@ def listen(path):
 
 class RangeForward:
     """SAMPLE (display only): copy each ultrasonic range line to the vision connection(s), for vision's
-    preview bar. A connection counts as vision once it has sent an Alert or box line. Never blocks: if vision
-    isn't reading (e.g. loading the model), the copy is dropped, so a stalled vision can't stall the ultrasonic
-    thread."""
+    preview bar. A connection counts as vision once it has sent an Alert or box line.
+
+    Must never hold anything up. Each vision connection has its own small queue and writer thread: send() only
+    does put_nowait (a full queue drops the copy) and returns, so the ultrasonic thread and vision's reader
+    thread never wait on vision reading. Only that connection's writer can block (vision busy, e.g. loading the
+    model), and it holds no lock. (The first version sent under a shared lock and deadlocked on the board.)"""
+
+    QUEUE_LINES = 8
 
     def __init__(self):
-        self._conns = set()
+        self._queues = {}  # conn -> queue of encoded lines
         self._lock = threading.Lock()
 
     def add(self, conn):
         with self._lock:
-            self._conns.add(conn)
+            if conn in self._queues:
+                return
+            q = queue.Queue(maxsize=self.QUEUE_LINES)
+            self._queues[conn] = q
+        threading.Thread(target=self._writer, args=(conn, q), daemon=True).start()
 
     def remove(self, conn):
         with self._lock:
-            self._conns.discard(conn)
+            q = self._queues.pop(conn, None)
+        if q is not None:
+            try:
+                q.put_nowait(None)  # wake the writer so it exits; if the queue is full, closing conn ends it
+            except queue.Full:
+                pass
 
     def send(self, line):
         data = (line + "\n").encode()
         with self._lock:
-            # Only to connections with room right now: a writable socket has at least its low-water mark
-            # (~2 KB) free and a line is < 40 bytes, so sendall can't block. (MSG_DONTWAIT is not honoured on
-            # every platform's UNIX sockets: on macOS it blocked.) No room = vision isn't reading: drop the copy.
-            _, ready, _ = select.select([], list(self._conns), [], 0)
-            for conn in ready:
+            queues = list(self._queues.values())
+        for q in queues:
+            try:
+                q.put_nowait(data)
+            except queue.Full:
+                pass  # vision isn't keeping up: drop this copy (display only)
+
+    @staticmethod
+    def _writer(conn, q):
+        while (data := q.get()) is not None:
+            try:
                 conn.sendall(data)
+            except OSError:
+                return  # vision disconnected (its reader thread removes it): normal at a socket boundary
 
 
 def serve_client(conn, fusion, forward):
