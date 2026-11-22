@@ -13,7 +13,7 @@ LED_BLUE = 17   # unused by io for now; kept off
 LED_RED = 27
 LED_YELLOW = 23
 LED_GREEN = 24
-SERVO = 5
+SERVO = 5  # GPIO 5 = physical header pin 29 (pin 30 next to it is a ground pin)
 OUTPUTS = (LED_BLUE, LED_RED, LED_YELLOW, LED_GREEN, SERVO)
 
 REST_US = 1000
@@ -69,8 +69,12 @@ class Actuator:
         self._gpio.write(LED_RED, level == 3)
 
     def _pulse(self, us):
+        # time.sleep rounds up to the 1 ms system tick on QNX (1.4 ms and 1.6 ms both took 2.0 ms), so the
+        # pulse width is a busy wait; the gap to the next pulse can use sleep, its accuracy does not matter.
         self._gpio.write(SERVO, True)
-        time.sleep(us / 1e6)
+        end = time.perf_counter() + us / 1e6
+        while time.perf_counter() < end:
+            pass
         self._gpio.write(SERVO, False)
         time.sleep(PERIOD_S - us / 1e6)
 
