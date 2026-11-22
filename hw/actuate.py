@@ -14,7 +14,7 @@ import time
 import rpi_gpio as GPIO
 
 LED_BLUE = 17   # unused by io for now; kept off
-LED_RED = 22
+LED_RED = 27
 LED_YELLOW = 23
 LED_GREEN = 24
 BUZZER = 18     # passive buzzer through a transistor; hardware PWM pin
