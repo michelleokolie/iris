@@ -35,7 +35,7 @@ git worktree add ..\iris-submit -b mount-submission
 - [x] Debounce Alerts (vision/debounce.*), on the board with 1/3/2; tuning via VISION_DEBOUNCE ongoing
 - [x] "ahead" = sides within 0.05 (decide.cpp, interfaces.md)
 - [x] Ultrasonic fused with the camera in io (hw/fuse.py, PR #12); vision also sends a `box` line per frame for label/size checks (`box-fusion`)
-- [ ] (low priority) Camera level 3 needs box height > 0.8, drop the y2 > 0.9 test (tilt cuts feet off and fakes "imminent"). Only matters when the ultrasonic has no reading (io ignores camera level 3 otherwise); worst case is a false alarm. Apply after `box-fusion` merges (same lines in decide.cpp)
+- [x] Camera level 3 = in-path box taller than 0.8 of the frame (no y2 test); verify on the board with a person 3-4 m away (expect level 2)
 - [ ] `speak` (Python, in `io`): phrases for Alert and fall; audio route (phone / dongle / Bluetooth)
 
 ## D. Build + submission (`mount-submission`)

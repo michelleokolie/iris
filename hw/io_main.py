@@ -195,7 +195,7 @@ if __name__ == "__main__":
     ap.add_argument("--socket", default=SOCKET_PATH)
     args = ap.parse_args()
     block_sigint()  # the servo thread inherits the mask; main unblocks it below
-    actuator = Actuator()
+    actuator = Actuator(thread_runner=run_thread)
     signal.pthread_sigmask(signal.SIG_UNBLOCK, {signal.SIGINT})
     accel = Accel(helper=ACCEL_HELPER, hz=ACCEL_HZ)  # created here so a missing helper stops io at startup
     speaker = PhoneSpeaker()  # binds the port here so a port already in use stops io at startup
