@@ -31,6 +31,7 @@ BOX_STALE_S = 0.5    # a box older than this is ignored (vision sends one every 
 RANGE_HOLD_S = 1.0   # the last good range is kept this long, through "range none" gaps (41% no-echo on the board)
 VISION_STALE_S = 1.5  # no vision line (box or Alert) for this long = camera lost (vision sends a box every ~0.12 s)
 SAY_MIN_GAP_S = 1.0  # at most one sentence per this, unless the level goes up
+CLEAR_REPEAT_S = 5.0  # "path clear" is said again this often while the path stays clear
 
 
 def parse_alert(line):
@@ -135,15 +136,19 @@ class Fusion:
             self._actuator.alert(*fused)
         name = identify(box, rng)
         where = position(box)
-        key = (0,) if fused[0] == 0 else (fused[0], where, name, rng is not None)  # level 0 always says "path clear"
+        # Speech treats level 1 (far, green LED) as clear too: only the warnings (2, 3) describe an object.
+        level = 0 if fused[0] <= 1 else fused[0]
+        key = (0,) if level == 0 else (level, where, name, rng is not None)  # clear is one key: "path clear"
         if key == self._last_key:  # speak on a change of level, position, name or having a distance, not of its value
-            return
-        escalates = fused[0] > self._said_level
+            if level != 0 or t - self._said_t < CLEAR_REPEAT_S:
+                return
+            # still clear: say "path clear" again every CLEAR_REPEAT_S
+        escalates = level > self._said_level
         if escalates or self._said_t is None or t - self._said_t >= SAY_MIN_GAP_S:
             self._last_key = key
-            self._said_level = fused[0]
+            self._said_level = level
             self._said_t = t
-            self._say(phrase(fused[0], where, name, rng))  # otherwise a later refresh() says it once the gap has passed
+            self._say(phrase(level, where, name, rng))  # otherwise a later refresh() says it once the gap has passed
 
 
 def block_sigint():
