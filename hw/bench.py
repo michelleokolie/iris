@@ -1,16 +1,16 @@
-"""Bench test on the Pi: python3 hw/bench.py led | servo | alerts"""
+"""Bench test on the Pi: sudo python3 hw/bench.py led | servo | alerts"""
 import sys
 import time
 
 import actuate
 
 if len(sys.argv) != 2 or sys.argv[1] not in {"led", "servo", "alerts"}:
-    raise SystemExit("usage: python3 hw/bench.py led | servo | alerts")
+    raise SystemExit("usage: sudo python3 hw/bench.py led | servo | alerts")
 mode = sys.argv[1]
 a = actuate.Actuator()
 
 if mode == "led":
-    for pin in (actuate.LED_RED, actuate.LED_GREEN):
+    for pin in (actuate.LED_BLUE, actuate.LED_RED, actuate.LED_YELLOW, actuate.LED_GREEN):
         print("pin", pin)
         a._gpio.write(pin, True)
         time.sleep(1)
