@@ -1,6 +1,6 @@
 # Assistive Vision Wearable (Hack Western 13)
 
-Chest-mounted wearable for blind and low-vision users. Raspberry Pi 5 running QNX detects obstacles (and falls) and tells the wearer what to do: spoken guidance to earbuds (ideal), servo tap + LEDs (MVP). Outdoor/trail focus. Name TBD.
+Chest-mounted wearable for blind and low-vision users. Raspberry Pi 5 running QNX detects obstacles and tells the wearer what to do: spoken guidance to earbuds (ideal), servo tap + LEDs (MVP). Outdoor/trail focus. Name TBD.
 
 Prize targets: QNX embedded AI (must run on QNX, use an open-source QNX AI module: onnxruntime), Sun Life Health, PCBWay Hardware, Most Adventurous, Gemini (stretch).
 
@@ -15,10 +15,9 @@ Prize targets: QNX embedded AI (must run on QNX, use an open-source QNX AI modul
 ## Pipeline
 vision (C++): capture -> detect (onnxruntime) -> decide --Alert over /tmp/iris.sock--> io (Python): fuse -> actuate (servo, LEDs) + speak (audio)
 ultrasonic (C++, hw/ultrasonic.cpp) --Range over /tmp/iris.sock--> io (Python): fuse
-accelerometer (hw/accel C helper) -> io (Python thread): fall detection (hw/fall.py) -> speak
 
 ## Hardware
-Pi 5 + QNX, 1 USB webcam (MVP; 2nd camera is stretch), servo (tap arm), 2 LEDs (1 red, 1 green), 3-axis accelerometer (I2C), rotary angle sensor (analog, needs Grove Base Hat/ADC), IR reflective sensor (hand-wave trigger), USB-C power bank. Pi 5 has no headphone jack and no analog input. Power the servo from the bank/separate 5V rail, shared ground.
+Pi 5 + QNX, 1 USB webcam (MVP; 2nd camera is stretch), servo (tap arm), 2 LEDs (1 red, 1 green), rotary angle sensor (analog, needs Grove Base Hat/ADC), IR reflective sensor (hand-wave trigger), USB-C power bank. Pi 5 has no headphone jack and no analog input. Power the servo from the bank/separate 5V rail, shared ground.
 
 ## Context hygiene
 `/clear` between streams. Start each stream by reading this file, `docs/interfaces.md`, `docs/tasks.md`.

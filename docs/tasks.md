@@ -21,7 +21,7 @@ git worktree add ..\iris-submit -b mount-submission
 ## B. Hardware (`hw-actuators`)
 - [ ] Servo wired (separate 5V, shared ground), moves on command
 - [ ] 4 LEDs wired and switchable
-- [ ] Grove Base Hat or ADC for rotary; accelerometer on I2C; IR sensor
+- [ ] Grove Base Hat or ADC for rotary; IR sensor
 - [ ] Each part works alone before QNX integration; photograph wiring
 - [ ] Power bank powers Pi + servo
 - [ ] `io` (Python): listen on /tmp/iris.sock, parse Alert lines per docs/interfaces.md, drive servo + LEDs
@@ -36,7 +36,7 @@ git worktree add ..\iris-submit -b mount-submission
 - [x] "ahead" = sides within 0.05 (decide.cpp, interfaces.md)
 - [x] Ultrasonic fused with the camera in io (hw/fuse.py, PR #12); vision also sends a `box` line per frame for label/size checks (`box-fusion`)
 - [x] Camera level 3 = in-path box taller than 0.8 of the frame (no y2 test); verify on the board with a person 3-4 m away (expect level 2)
-- [ ] `speak` (Python, in `io`): phrases for Alert and fall; audio route (phone / dongle / Bluetooth)
+- [ ] `speak` (Python, in `io`): phrases for Alert; audio route (phone / dongle / Bluetooth)
 
 ## D. Build + submission (`mount-submission`)
 - [ ] Cardboard/zip-tie chest mount first
@@ -45,4 +45,4 @@ git worktree add ..\iris-submit -b mount-submission
 - [ ] Devpost: all teammates, story, demo video, PCBWay "next version" slide, Sun Life impact slide
 
 ## Stretch (anyone, after MVP)
-Left/right cues, fall detection (accelerometer, walking-only), Gemini scene description on IR trigger, rotary sensitivity, stereo/downward camera.
+Left/right cues, Gemini scene description on IR trigger, rotary sensitivity, stereo/downward camera.

@@ -48,7 +48,6 @@ def identify(box, rng):
 
 
 PATH_X = (0.33, 0.67)  # image x-range of the camera's in-path strip (same strip vision decides on)
-FALL = "Fall detected. Are you okay?"
 WARNINGS = ["Stop!", "Stop!", "Watch out!", "Careful!", "Hold on!"]  # level 3 opens with one, picked at random
 VERY_CLOSE_CM = 20  # nearer than this says "very close" instead of a number
 WORDS = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five", 6: "six", 7: "seven", 8: "eight", 9: "nine", 10: "ten"}

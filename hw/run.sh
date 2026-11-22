@@ -6,7 +6,7 @@
 # than MAX_EXITS times within WINDOW_S is broken: the whole system is stopped and this script exits 1.
 # The programs themselves never respawn anything (they crash loudly); supervision lives only here.
 #
-# Needs (build on the Pi, see hw/README.md): hw/accel, hw/ultrasonic, vision/vision, and the model file.
+# Needs (build on the Pi, see hw/README.md): hw/ultrasonic, vision/vision, and the model file.
 # Environment: IRIS_MODEL (model path), IRIS_SOCK (default /tmp/iris.sock), IRIS_LOGDIR (default /tmp/iris).
 # Logs: $IRIS_LOGDIR/io.log, vision.log, ultrasonic.log (truncated at start, appended across restarts).
 #
@@ -24,7 +24,7 @@ RESTART_WAIT_S=1
 WINDOW_S=30
 MAX_EXITS=5
 
-for f in "$HW/accel" "$HW/ultrasonic" "$ROOT/vision/vision"; do
+for f in "$HW/ultrasonic" "$ROOT/vision/vision"; do
     [ -x "$f" ] || { echo "run.sh: $f is missing or not executable; build it first (hw/README.md)" >&2; exit 2; }
 done
 for f in "$HW/io_main.py" "$MODEL"; do
