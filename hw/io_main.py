@@ -1,8 +1,8 @@
 """io process: listens on a UNIX socket and actuates the fused Alert.
 
-Usage: sudo python3 hw/io_main.py [--socket PATH]   (needs hw/accel built: gcc -o hw/accel hw/accel.c)
+Usage: sudo python3 hw/io_main.py [--socket PATH]
 Several clients may connect at once (vision, ultrasonic), one thread each. A thread reads the
-accelerometer and reports falls; another serves the phone page that speaks io's sentences (hw/speak.py,
+phone page that speaks io's sentences (hw/speak.py,
 http://<pi address>:8080/). Line formats (docs/interfaces.md):
   vision:     "<level> <direction>\n"  level 0-3, direction left|right|ahead|clear;
               "0 clear" is the only level-0 message
@@ -19,17 +19,13 @@ import threading
 import time
 import traceback
 
-from accel import Accel
 from actuate import Actuator
-from describe import FALL, Box, identify, phrase, position
-from fall import FallDetector
+from describe import Box, identify, phrase, position
 import fuse as fuse_settings
 from fuse import RangeLevel, fuse
 from speak import PhoneSpeaker
 
 SOCKET_PATH = "/tmp/iris.sock"
-ACCEL_HELPER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "accel")
-ACCEL_HZ = 25
 DIRECTIONS = ("left", "right", "ahead", "clear")
 BOX_STALE_S = 0.5    # a box older than this is ignored (vision sends one every frame, ~0.12 s)
 RANGE_HOLD_S = 1.0   # the last good range is kept this long, through "range none" gaps (41% no-echo on the board)
@@ -113,12 +109,6 @@ class Fusion:
         """Re-evaluate with the current time, so a range that stops arriving still expires."""
         with self._lock:
             self._update(self._now())
-
-    def on_fall(self):
-        with self._lock:
-            if self._trace:
-                print(f"{self._now():.4f} fall", flush=True)
-            self._say(FALL)
 
     def _update(self, t):
         lost = self._vision_t is not None and t - self._vision_t > VISION_STALE_S
@@ -241,7 +231,7 @@ def serve_client(conn, fusion, forward):
 def run_thread(body, *args):
     """Entry point of every io thread: block SIGINT, run body, and if it raises take io down.
 
-    A dead client or accelerometer thread would leave io running camera-only with no warning (this happened on the
+    A dead client thread would leave io running camera-only with no warning (this happened on the
     bench when an assert killed the ultrasonic client), so the failure goes to the main thread as a SIGINT: it raises
     KeyboardInterrupt there, the finally block switches the outputs off, and io exits with the traceback."""
     block_sigint()
@@ -258,13 +248,6 @@ def watchdog_loop(fusion):
         fusion.refresh()
 
 
-def fall_loop(accel, fusion):
-    detector = FallDetector()
-    while True:
-        if detector.update(time.monotonic(), accel.read()):
-            fusion.on_fall()
-
-
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--socket", default=SOCKET_PATH)
@@ -273,7 +256,6 @@ if __name__ == "__main__":
     block_sigint()  # the servo thread inherits the mask; main unblocks it below
     actuator = Actuator(thread_runner=run_thread)
     signal.pthread_sigmask(signal.SIG_UNBLOCK, {signal.SIGINT})
-    accel = Accel(helper=ACCEL_HELPER, hz=ACCEL_HZ)  # created here so a missing helper stops io at startup
     speaker = PhoneSpeaker()  # binds the port here so a port already in use stops io at startup
 
     def say(text):  # every sentence goes to the console and to the phone page
@@ -288,7 +270,6 @@ if __name__ == "__main__":
     forward = RangeForward()  # SAMPLE: range lines copied to vision for its preview bar
     threading.Thread(target=run_thread, args=(speaker.serve,), daemon=True).start()
     threading.Thread(target=run_thread, args=(watchdog_loop, fusion), daemon=True).start()
-    threading.Thread(target=run_thread, args=(fall_loop, accel, fusion), daemon=True).start()
     try:
         while True:
             threading.Thread(target=run_thread, args=(serve_client, server.accept()[0], fusion, forward), daemon=True).start()
