@@ -57,7 +57,7 @@ if mode == "sweep":
 
 a = actuate.Actuator()
 if mode == "led":
-    for pin in (actuate.LED_RED, actuate.LED_GREEN):
+    for pin in (actuate.LED_BLUE, actuate.LED_RED, actuate.LED_YELLOW, actuate.LED_GREEN):
         print("pin", pin)
         a._gpio.write(pin, True)
         time.sleep(1)
