@@ -6,7 +6,7 @@ camera = (level, direction) from vision; rng = (cm, closing_cm_per_s) or None (n
 
 NEAR_CM = 60    # closer than this: imminent
 MID_CM = 120    # closer than this: near
-FAR_CM = 250    # closer than this: far
+FAR_CM = 150    # closer than this: far (was 250: indoors a wall or table is almost always within 2.5 m)
 TTC_S = 1.5     # time-to-contact under this: imminent
 HYSTERESIS = 1.15   # stay in a level until the distance is 15% past its limit (a reading wanders +-6 cm)
 TTC_MIN_CLOSING = 70  # cm/s; closing speed of a stationary object reads +-60 on the board, walking is 100+

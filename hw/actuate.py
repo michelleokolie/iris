@@ -3,7 +3,7 @@
 GPIO is driven by text writes to /dev/gpio/N (QNX rpi_gpio). The servo is on GPIO5, which has no hardware
 PWM, so it is software PWM from a thread.
 
-States (level): 0 green / 1 no LED / 2 yellow / 3 red. The servo taps at every level above 0, faster as the
+States (level): 0 green / 1 green (far, not a warning) / 2 yellow / 3 red. The servo taps at every level above 0, faster as the
 level rises. No buzzer: the passive buzzer was dropped (see docs/decisions.md); the phone speaks instead.
 """
 import threading
@@ -63,8 +63,9 @@ class Actuator:
 
     def alert(self, level, direction):
         # LEDs are written on every call (not only on a change), so the first "0 clear" lights green.
+        # Green for 0 and 1: "something far ahead, keep going" is not a warning; yellow and red are the warnings.
         self._level = level
-        self._gpio.write(LED_GREEN, level == 0)
+        self._gpio.write(LED_GREEN, level <= 1)
         self._gpio.write(LED_YELLOW, level == 2)
         self._gpio.write(LED_RED, level == 3)
 

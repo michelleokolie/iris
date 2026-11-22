@@ -3,6 +3,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
+#include <cstdlib>
 
 static constexpr float STRIP_LEFT = 0.33f;
 static constexpr float STRIP_RIGHT = 0.67f;
@@ -10,11 +12,19 @@ static constexpr float AHEAD_TOLERANCE = 0.05f;  // fraction of frame width
 
 static bool in_path(const Box& b) { return b.x2 > STRIP_LEFT && b.x1 < STRIP_RIGHT; }
 
-static bool is_close(const Box& b) { return (b.y2 - b.y1) > 0.5f || b.y2 > 0.9f; }
+// Box height (fraction of the frame) is the camera's stand-in for distance. Height only, never where the bottom
+// edge lands: that depends on camera tilt (tilted up, a person 3-4 m away has their feet cut off and their box
+// touches the bottom). Levels 1/2/3 need the in-path box taller than far/close/very_close; a smaller box (far
+// away, or small) doesn't count at all, so the path reads clear. Biased against false alarms: a warning that is
+// always on gets ignored. VISION_LEVELS=far,close,very_close overrides the defaults for tuning on the board.
+static LevelThresholds read_levels() {
+    LevelThresholds t{0.25f, 0.5f, 0.8f};
+    if (const char* e = std::getenv("VISION_LEVELS")) std::sscanf(e, "%f,%f,%f", &t.far, &t.close, &t.very_close);
+    return t;
+}
+static const LevelThresholds LEVELS = read_levels();
 
-// Height only: where the bottom edge lands depends on camera tilt (a tilted-up camera cuts the feet
-// of a person 3-4 m away, so their box touches the bottom), so y2 can't mean "imminent".
-static bool is_very_close(const Box& b) { return (b.y2 - b.y1) > 0.8f; }
+LevelThresholds level_thresholds() { return LEVELS; }
 
 static float occupancy(const std::vector<Box>& boxes, float lo, float hi) {
     float total = 0.0f;
@@ -25,8 +35,10 @@ static float occupancy(const std::vector<Box>& boxes, float lo, float hi) {
 // Level of one box: 0 if not in path, else 1 far / 2 near / 3 imminent.
 static int box_level(const Box& b) {
     if (!in_path(b)) return 0;
-    if (is_very_close(b)) return 3;
-    return is_close(b) ? 2 : 1;
+    float h = b.y2 - b.y1;
+    if (h > LEVELS.very_close) return 3;
+    if (h > LEVELS.close) return 2;
+    return h > LEVELS.far ? 1 : 0;
 }
 
 std::optional<Box> primary_box(const std::vector<Box>& boxes) {

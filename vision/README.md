@@ -28,6 +28,11 @@ Live preview on the Pi's screen (watch over VNC), for tuning and demos; works wi
 sudo VISION_PREVIEW=1 ./vision deimv2_femto.onnx /tmp/iris.sock
 ```
 
+Tuning on the board without rebuilding (the startup lines print the values in use):
+- `VISION_LEVELS=far,close,very_close`: in-path box heights for levels 1/2/3 (default `0.25,0.5,0.8`). Raise them for fewer warnings.
+- `VISION_DEBOUNCE=up,down,turn`: frames before an Alert changes (default `1,3,2`).
+- `VISION_SCORE=0.4`: detector confidence cut-off.
+
 The window shows the camera frame, every detection (thin grey) labelled with its COCO name and score (`PERSON 87`), the box driving the Alert (thick, in the level's colour), the in-path strip (blue lines at x 0.33 and 0.67), and a bar on top coloured by level (green 0, grey 1, yellow 2, red 3) reading e.g. `LEVEL 2 RIGHT`, with a white marker on the free side.
 
 Start `io` first (`hw/io_main.py`), then `vision`. The ultrasonic reader (`hw/ultrasonic.cpp`) also connects to `io` on `/tmp/iris.sock`; `io` combines it with the camera Alert (`hw/fuse.py`). Besides the debounced Alert, `vision` sends a `box` line every frame (the in-path box that drives the Alert, see docs/interfaces.md) so `io` can check labels and sizes against the ultrasonic distance.
