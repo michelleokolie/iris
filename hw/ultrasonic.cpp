@@ -37,6 +37,7 @@ extern "C" {
 
 static constexpr double CM_PER_US = 0.0343 / 2.0;     // speed of sound, halved for the round trip
 static constexpr uint64_t EDGE_TIMEOUT_NS = 30'000'000;  // ~5 m round trip
+static constexpr double MIN_PULSE_US = 120;           // ~2 cm, the HC-SR04's minimum range: a shorter pulse is a glitch
 static constexpr double PERIOD_S = 0.060;             // HC-SR04 needs ~60 ms between pings
 static constexpr size_t FILTER_SIZE = 3;
 static constexpr size_t WINDOW_SIZE = 7;
@@ -140,7 +141,9 @@ static double read_cm(int trig) {
     if (!wait_edge(EDGE_TIMEOUT_NS)) return -1;  // rising
     double t_rise = now_s();
     if (!wait_edge(EDGE_TIMEOUT_NS)) return -1;  // falling
-    return (now_s() - t_rise) * 1e6 * CM_PER_US;
+    double pulse_us = (now_s() - t_rise) * 1e6;
+    if (pulse_us < MIN_PULSE_US) return -1;  // a near-zero edge pair is not an echo ("range none", never "range 0.0")
+    return pulse_us * CM_PER_US;
 }
 
 static int connect_io(const char* path) {
@@ -188,6 +191,11 @@ int main(int argc, char** argv) {
     check(rpi_gpio_setup_pull(echo, GPIO_IN, GPIO_PUD_OFF), "setup echo");
     check(rpi_gpio_add_event_detect(echo, coid, GPIO_RISING | GPIO_FALLING, EVENT_ECHO), "event detect");
     check(rpi_gpio_output(trig, GPIO_LOW), "trigger low");
+    // Every exit path must release the event registration: a reader that dies without rpi_gpio_cleanup() leaves
+    // GPIO 16 busy ("event detect: Resource busy") until the Pi reboots. exit() runs this; a dead io is then
+    // an exit(1) from send_line (EPIPE, SIGPIPE ignored) instead of a kill.
+    std::atexit([] { rpi_gpio_cleanup(); });
+    signal(SIGPIPE, SIG_IGN);
     sleep(1);  // let the sensor settle
 
     int fd = connect_io(path);
@@ -207,6 +215,5 @@ int main(int argc, char** argv) {
         double rest = PERIOD_S - (now_s() - t0);
         if (rest > 0) usleep(static_cast<useconds_t>(rest * 1e6));
     }
-    check(rpi_gpio_cleanup(), "cleanup");
-    return 0;
+    return 0;  // the atexit handler runs rpi_gpio_cleanup()
 }

@@ -36,14 +36,17 @@ class DevGpio:
 
 
 class Actuator:
-    def __init__(self):
+    def __init__(self, thread_runner=None):
         self._gpio = DevGpio()
         for pin in OUTPUTS:
             self._gpio.set_out(pin)
             self._gpio.write(pin, False)
         self._level = 0
         self._stopped = False
-        self._thread = threading.Thread(target=self._servo_loop, daemon=True)
+        if thread_runner is None:
+            self._thread = threading.Thread(target=self._servo_loop, daemon=True)
+        else:
+            self._thread = threading.Thread(target=thread_runner, args=(self._servo_loop,), daemon=True)
         self._thread.start()
 
     def off(self):
