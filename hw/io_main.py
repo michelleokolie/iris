@@ -12,6 +12,7 @@ IRIS_TRACE=1 prints a monotonic timestamp per received line, for latency measure
 """
 import argparse
 import os
+import select
 import signal
 import socket
 import threading
@@ -167,12 +168,49 @@ def listen(path):
     return server
 
 
-def serve_client(conn, fusion):
+class RangeForward:
+    """SAMPLE (display only): copy each ultrasonic range line to the vision connection(s), for vision's
+    preview bar. A connection counts as vision once it has sent an Alert or box line. Never blocks: if vision
+    isn't reading (e.g. loading the model), the copy is dropped, so a stalled vision can't stall the ultrasonic
+    thread."""
+
+    def __init__(self):
+        self._conns = set()
+        self._lock = threading.Lock()
+
+    def add(self, conn):
+        with self._lock:
+            self._conns.add(conn)
+
+    def remove(self, conn):
+        with self._lock:
+            self._conns.discard(conn)
+
+    def send(self, line):
+        data = (line + "\n").encode()
+        with self._lock:
+            # Only to connections with room right now: a writable socket has at least its low-water mark
+            # (~2 KB) free and a line is < 40 bytes, so sendall can't block. (MSG_DONTWAIT is not honoured on
+            # every platform's UNIX sockets: on macOS it blocked.) No room = vision isn't reading: drop the copy.
+            _, ready, _ = select.select([], list(self._conns), [], 0)
+            for conn in ready:
+                conn.sendall(data)
+
+
+def serve_client(conn, fusion, forward):
     """Feed the lines from one connected client to fusion until it disconnects."""
     with conn, conn.makefile("r", newline="\n") as lines:
-        for line in lines:
-            assert line.endswith("\n"), repr(line)
-            fusion.on_line(line[:-1])
+        try:
+            for line in lines:
+                assert line.endswith("\n"), repr(line)
+                line = line[:-1]
+                if line.startswith("range "):
+                    forward.send(line)
+                else:
+                    forward.add(conn)  # Alert/box lines: this is vision, it gets the range copies
+                fusion.on_line(line)
+        finally:
+            forward.remove(conn)
 
 
 def run_thread(body, *args):
@@ -219,11 +257,12 @@ if __name__ == "__main__":
 
     fusion = Fusion(actuator, trace=bool(os.environ.get("IRIS_TRACE")), say=say)
     server = listen(args.socket)
+    forward = RangeForward()  # SAMPLE: range lines copied to vision for its preview bar
     threading.Thread(target=run_thread, args=(speaker.serve,), daemon=True).start()
     threading.Thread(target=run_thread, args=(watchdog_loop, fusion), daemon=True).start()
     threading.Thread(target=run_thread, args=(fall_loop, accel, fusion), daemon=True).start()
     try:
         while True:
-            threading.Thread(target=run_thread, args=(serve_client, server.accept()[0], fusion), daemon=True).start()
+            threading.Thread(target=run_thread, args=(serve_client, server.accept()[0], fusion, forward), daemon=True).start()
     finally:
         actuator.off()

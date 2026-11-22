@@ -11,6 +11,7 @@
 #include "detect.h"
 #include "preview.h"
 
+#include <poll.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
@@ -63,6 +64,35 @@ static std::string box_line(const std::optional<Box>& b) {
     return buf;
 }
 
+// SAMPLE (display only): io copies each ultrasonic "range <cm> <closing>" / "range none" line back to vision
+// over the same socket. Read whatever has arrived without blocking and keep the newest, for the preview bar.
+struct RangeNote {
+    std::string buf;
+    std::string text = "US -";  // shown when nothing has arrived yet or the newest is stale
+    std::chrono::steady_clock::time_point at{};
+
+    void poll_from(int fd) {
+        pollfd p{fd, POLLIN, 0};
+        while (::poll(&p, 1, 0) > 0 && (p.revents & POLLIN)) {
+            char chunk[512];
+            ssize_t n = read(fd, chunk, sizeof(chunk));
+            if (n <= 0) break;
+            buf.append(chunk, static_cast<size_t>(n));
+        }
+        for (size_t nl; (nl = buf.find('\n')) != std::string::npos; buf.erase(0, nl + 1)) {
+            std::string line = buf.substr(0, nl);
+            float cm = 0, closing = 0;
+            if (line == "range none") text = "US NONE";
+            else if (std::sscanf(line.c_str(), "range %f %f", &cm, &closing) == 2) text = "US " + std::to_string(static_cast<int>(cm)) + "CM";
+            else continue;  // a copy cut short by io's non-blocking send: skip it (display only)
+            at = std::chrono::steady_clock::now();
+        }
+    }
+    std::string current() const {
+        return std::chrono::steady_clock::now() - at > std::chrono::milliseconds(500) ? "US -" : text;
+    }
+};
+
 // Debug only: draw box outlines (red, 2 px) and write the frame as a PPM.
 static void write_debug_ppm(Frame frame, const std::vector<Box>& boxes) {
     for (const auto& b : boxes) {
@@ -97,6 +127,7 @@ int main(int argc, char** argv) {
     Debounce debounce(up, down, turn);
     const bool preview_on = std::getenv("VISION_PREVIEW") != nullptr;
     std::optional<Preview> preview;  // created on the first frame, which gives its size
+    RangeNote range_note;  // SAMPLE: ultrasonic reading for the preview bar, copied over by io
 
     for (;;) {
         Frame frame = capture.next();
@@ -115,7 +146,8 @@ int main(int argc, char** argv) {
         std::optional<Box> primary = primary_box(boxes);
         if (preview_on) {
             if (!preview) preview.emplace(frame.width, frame.height);
-            preview->show(frame, boxes, primary, alert);
+            if (fd >= 0) range_note.poll_from(fd);
+            preview->show(frame, boxes, primary, alert, range_note.current());
         }
         if (fd >= 0) send_line(fd, box_line(primary));
 
