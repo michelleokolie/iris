@@ -30,7 +30,7 @@ Rules for `decide`:
 - close = box height > 0.5 of frame, or y2 > 0.9
 - very close = box height > 0.8 of frame (height only: camera tilt cuts feet off and makes y2 meaningless for distance)
 - level: 0 if nothing in path; 3 if an in-path box is very close; 2 if an in-path box is close; else 1
-- direction = side with more free space (box width overlapping x 0..0.5 vs 0.5..1, all boxes); "ahead" when the two sides are within 0.05 of each other (obstacle roughly centred); "clear" when level 0
+- direction = away from the closest in-path box (the box driving the level, `primary_box`): its centre left of x 0.45 -> "right", right of 0.55 -> "left". When it is roughly centred, the side with more free space (box width overlapping x 0..0.5 vs 0.5..1, all boxes), "ahead" when the two sides are within 0.05 of each other. "clear" when level 0
 
 ## Socket (clients -> io)
 

@@ -40,12 +40,17 @@ std::optional<Box> primary_box(const std::vector<Box>& boxes) {
 }
 
 Alert decide(const std::vector<Box>& boxes) {
-    int level = 0;
-    for (const auto& b : boxes) level = std::max(level, box_level(b));
-    if (level == 0) return {0, "clear"};
+    std::optional<Box> closest = primary_box(boxes);  // most urgent in-path box, then tallest (= closest)
+    if (!closest) return {0, "clear"};
+    int level = box_level(*closest);
 
-    // "ahead" = neither side is clearly freer, i.e. the obstacle is roughly centred.
-    // Without a tolerance this needed an exact float tie and practically never fired.
+    // Steer away from the closest obstacle: a far table on one side must not outweigh a person right in front.
+    float centre = (closest->x1 + closest->x2) / 2;
+    if (centre < 0.5f - AHEAD_TOLERANCE) return {level, "right"};
+    if (centre > 0.5f + AHEAD_TOLERANCE) return {level, "left"};
+
+    // Closest obstacle roughly centred: pick the side with more free space over all boxes; "ahead" if neither
+    // side is clearly freer (without a tolerance an exact float tie practically never fired).
     float left = occupancy(boxes, 0.0f, 0.5f);
     float right = occupancy(boxes, 0.5f, 1.0f);
     if (std::abs(left - right) <= AHEAD_TOLERANCE) return {level, "ahead"};
